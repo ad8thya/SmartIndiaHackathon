@@ -1,0 +1,147 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "urban-twin"
+version = "0.1.0"
+description = "URBAN TWIN — public transport buses as mobile sensors feeding a live urban Digital Twin"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+# ---------------------------------------------------------------------------
+# EVERY dependency the team will need for the whole week lives here.
+# Nobody should have to touch this file mid-sprint.
+# Heavy ML/CV wheels are isolated in the optional [ml] group so M5 (platform)
+# and M6 (frontend) can install a light env in ~30 seconds.
+# ---------------------------------------------------------------------------
+dependencies = [
+    # web / api
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "websockets>=13",
+    "python-multipart>=0.0.12",
+    "httpx>=0.27",
+    # data / validation
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "orjson>=3.10",
+    # persistence
+    "sqlalchemy[asyncio]>=2.0.36",
+    "geoalchemy2>=0.15",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "psycopg2-binary>=2.9",
+    "redis>=5.2",
+    # messaging
+    "paho-mqtt>=2.1",
+    # geo / graph (light enough to keep in core — M2 needs them from day 2)
+    "shapely>=2.0",
+    "networkx>=3.4",
+    "pyproj>=3.7",
+    # misc
+    "numpy>=1.26",
+    "python-dotenv>=1.0",
+    "rich>=13.9",
+    "typer>=0.13",
+    "structlog>=24.4",
+]
+
+[project.optional-dependencies]
+# pip install -e ".[ml]"   → M1, M3, M4 (perception owners)
+ml = [
+    "ultralytics>=8.3",
+    "torch>=2.5",
+    "torchvision>=0.20",
+    # NOTE: no explicit opencv here. ultralytics and paddleocr each pull their
+    # own (opencv-python / opencv-contrib-python). Adding opencv-python-headless
+    # on top installed three distributions that all write the same `cv2` module,
+    # and whichever landed last won. If you need the headless build for a
+    # container, uninstall the others first rather than adding it alongside.
+    "paddleocr>=2.9",
+    "paddlepaddle>=2.6",
+    "scikit-learn>=1.5",
+    "filterpy>=1.4.5",
+    "pillow>=11.0",
+    "scipy>=1.14",
+]
+# pip install -e ".[geo]"  → M2 (traffic + what-if)
+geo = [
+    "osmnx>=2.0",
+    "geopandas>=1.0",
+    "rtree>=1.3",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-requests",
+    "pre-commit>=4.0",
+    "anyio>=4.6",
+]
+
+[project.scripts]
+urban-twin-replay = "services.replay.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["packages/contracts/src", "packages/db/src", "packages/citydata/src", "."]
+include = ["contracts*", "db*", "citydata*", "services*", "scripts*"]
+exclude = ["apps*", "infra*", "node_modules*"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = ["packages/db/src/db/migrations/versions", "node_modules", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N", "RUF", "ASYNC"]
+ignore = [
+    "B008",      # FastAPI's Depends()/Query() defaults are the documented idiom
+    "RUF012",    # ClassVar on every mutable class attribute is noise here
+    "N818",      # our exception names read better without an Error suffix
+    "RUF001",    # prose in this repo uses real typography (– × ≥) deliberately
+    "RUF002",
+    "RUF003",
+    "RUF022",    # __all__ is grouped by topic, not alphabetised, on purpose
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/test_*.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------------------
+[tool.mypy]
+# deliberately NOT pinned: mypy then matches whatever interpreter the venv has.
+# Pinning to 3.11 while running 3.12 makes mypy choke on numpy's own stubs.
+plugins = ["pydantic.mypy"]
+mypy_path = "packages/contracts/src:packages/db/src:packages/citydata/src"
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# strict only on the frozen shared layer — that is where mistakes cost the whole team
+module = ["contracts.*", "db.*", "citydata.*"]
+strict = true
+disallow_untyped_defs = true
+warn_return_any = true
+
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages", "services", "scripts"]
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "integration: needs docker services running",
+]

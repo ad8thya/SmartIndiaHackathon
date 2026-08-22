@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.local
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+node_modules/
+apps/*/dist/
+apps/*/.vite/
+.DS_Store
+*.log
+# model weights — anywhere, not just models/
+*.pt
+*.pth
+*.onnx
+*.pdparams
+models/
+
+# local data
+data/raw_video/
+data/processed/
+data/*.mbtiles
+data/*.pkl
+*.db
+*.sqlite3
+
+# typescript incremental build info
+apps/*/tsconfig.tsbuildinfo

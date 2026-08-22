@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'm[1-6]-*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: urbantwin
+          POSTGRES_PASSWORD: urbantwin
+          POSTGRES_DB: urbantwin
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U urbantwin" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: pip install -e ".[dev]"
+      - run: cp .env.example .env
+
+      - name: lint
+        run: ruff check .
+      - name: typecheck the frozen layer
+        run: mypy packages/contracts/src packages/db/src packages/citydata/src
+      - name: migrations apply cleanly
+        run: alembic -c packages/db/alembic.ini upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://urbantwin:urbantwin@localhost:5432/urbantwin
+      - name: seed
+        run: python scripts/seed.py
+        env:
+          DATABASE_URL: postgresql+asyncpg://urbantwin:urbantwin@localhost:5432/urbantwin
+      - name: tests
+        run: pytest -q
+        env:
+          DATABASE_URL: postgresql+asyncpg://urbantwin:urbantwin@localhost:5432/urbantwin
+
+      # the guard rail that matters most on a six-person team:
+      # nobody may merge a branch with their real-implementation flag left on
+      - name: all USE_REAL_* flags are false in .env.example
+        run: |
+          if grep -E '^USE_REAL_[A-Z]+=true' .env.example; then
+            echo "::error::a USE_REAL_* flag is true in .env.example — that changes the default for everyone"
+            exit 1
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [command, field]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - run: npm ci
+        working-directory: apps/${{ matrix.app }}
+      - run: npx tsc -b
+        working-directory: apps/${{ matrix.app }}
+      - run: npm run build
+        working-directory: apps/${{ matrix.app }}
+      - name: tests
+        if: matrix.app == 'command'
+        run: npm run test -- --run
+        working-directory: apps/${{ matrix.app }}

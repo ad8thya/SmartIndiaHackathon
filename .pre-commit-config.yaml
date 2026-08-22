@@ -1,0 +1,29 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-merge-conflict
+  - repo: local
+    hooks:
+      - id: mypy-shared
+        name: mypy (frozen shared layer only)
+        entry: mypy packages/contracts/src packages/db/src packages/citydata/src
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: contracts-guard
+        name: contracts are frozen after Day 1
+        entry: scripts/guard_contracts.sh
+        language: system
+        files: ^packages/contracts/
