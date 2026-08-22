@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    background: #080b14;
+    color: #e2e8f0;
+  }
+
+  /* thin dark scrollbars — the panels are dense and the default bars are loud */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #243050;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2f3d63;
+  }
+
+  select,
+  input {
+    color-scheme: dark;
+  }
+}
+
+/* maplibre's own controls, restyled for the dark shell */
+.maplibregl-ctrl-attrib {
+  background: rgba(8, 11, 20, 0.7) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+}
+.maplibregl-canvas {
+  outline: none;
+}
