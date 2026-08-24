@@ -84,7 +84,7 @@ dev = [
 ]
 
 [project.scripts]
-urban-twin-replay = "services.replay.__main__:main"
+urban-twin-replay = "services.tools.replay.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["packages/contracts/src", "packages/db/src", "packages/citydata/src", "."]

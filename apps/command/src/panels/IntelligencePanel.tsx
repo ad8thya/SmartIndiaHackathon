@@ -20,7 +20,7 @@
  * TODO (M3/M2):
  *   · click-through from a recommendation's evidence_event_ids to the actual
  *     Event rows once M2's real implementation resolves them (see
- *     services/recommend/impl.py)
+ *     services/cloud/intelligence/recommend/impl.py)
  *   · a per-road risk trend, once repair-outcome history exists
  */
 

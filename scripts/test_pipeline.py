@@ -26,11 +26,11 @@ from contracts import (
     WSMessageType,
 )
 
-from services.api.config import ApiSettings
-from services.api.fusion_loop import FusionLoop
-from services.api.hub import Broadcaster, LiveState
-from services.replay import Simulator
-from services.replay.config import ReplaySettings
+from services.cloud.api.config import ApiSettings
+from services.cloud.api.fusion_loop import FusionLoop
+from services.cloud.api.hub import Broadcaster, LiveState
+from services.tools.replay import Simulator
+from services.tools.replay.config import ReplaySettings
 
 
 class LoopbackPublisher:
@@ -181,7 +181,7 @@ async def test_traffic_analytics_see_the_simulated_day(pipeline) -> None:
     simulator, state, _, fusion, _ = pipeline
     await drive(simulator, fusion, 120)
 
-    from services.analytics.traffic import get_traffic_analyzer
+    from services.cloud.intelligence.traffic_analytics import get_traffic_analyzer
 
     conditions = get_traffic_analyzer().analyze(state.recent_observations())
     assert conditions

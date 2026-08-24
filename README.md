@@ -155,13 +155,13 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
 
 | Diagram stage | This repo, today |
 |---|---|
-| Cameras, edge device, frame extraction | Simulated by `services/replay` — 6 virtual buses, `FrameMeta` standing in for a real frame |
-| Multi-task inference engine | `services/perception/{defects,pedestrian,incidents}` — mocks now, one `USE_REAL_*` flag each away from real YOLO/ByteTrack/PaddleOCR |
+| Cameras, edge device, frame extraction | Simulated by `services/tools/replay` — 6 virtual buses, `FrameMeta` standing in for a real frame |
+| Multi-task inference engine | `services/edge/{defects,pedestrian,incidents}` — mocks now, one `USE_REAL_*` flag each away from real YOLO/ByteTrack/PaddleOCR |
 | Event generation + local buffer + network | `Observation` / `IncidentReport` (`packages/contracts`), published over MQTT (`bus/{id}/observation`, `bus/{id}/incident`) |
-| Central platform API | FastAPI (`services/api`), not Spring Boot, in this build |
-| Event validation & multi-bus consensus | `services/fusion` — noisy-OR confidence + the `DETECTED → AI_VERIFIED → AUTHORITY_NOTIFIED` ladder |
+| Central platform API | FastAPI (`services/cloud/api`), not Spring Boot, in this build |
+| Event validation & multi-bus consensus | `services/cloud/consensus` — noisy-OR confidence + the `DETECTED → AI_VERIFIED → AUTHORITY_NOTIFIED` ladder |
 | Central database | PostGIS on Postgres (`packages/db`) |
-| AI Intelligence Layer | `services/risk` (Urban Risk Index), `services/recommend` (Maintenance Recommendation Engine), `services/analytics/traffic` + `services/whatif` (congestion / route delay), `services/perception/incidents/near_miss.py` (incident + near-miss severity) |
+| AI Intelligence Layer | `services/cloud/intelligence/urban_risk` (Urban Risk Index), `services/cloud/intelligence/recommend` (Maintenance Recommendation Engine), `services/cloud/intelligence/traffic_analytics` + `services/cloud/intelligence/whatif` (congestion / route delay), `services/edge/incidents/near_miss.py` (incident + near-miss severity) |
 | GIS & Digital Twin | `apps/command` — MapLibre + deck.gl, 3D twin at 45° pitch, road-health / congestion / risk-band heatmaps |
 | Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command centre and `apps/field` |
 | End users | Command centre (dispatch desk) + field app (repair crews), same roles as the department list above |
@@ -252,7 +252,7 @@ services/<module>/
 
 **Files you own**
 ```
-services/perception/defects/**
+services/edge/defects/**
 apps/command/src/panels/DefectsPanel.tsx
 ```
 
@@ -289,9 +289,9 @@ type chips, evidence thumbnails, SLA countdown per row.
 
 **Files you own**
 ```
-services/analytics/traffic/**
-services/whatif/**
-services/recommend/**                        (AI intelligence layer — added v1.1.0)
+services/cloud/intelligence/traffic_analytics/**
+services/cloud/intelligence/whatif/**
+services/cloud/intelligence/recommend/**                        (AI intelligence layer — added v1.1.0)
 apps/command/src/panels/TrafficPanel.tsx
 apps/command/src/panels/WhatIfPanel.tsx
 apps/command/src/panels/IntelligencePanel.tsx (you contribute; M3 owns the file)
@@ -317,7 +317,7 @@ flags: `USE_REAL_TRAFFIC`, `USE_REAL_WHATIF`, `USE_REAL_RECOMMEND`
 detail with PCI bar. WhatIfPanel: road picker → close → per-route delta with a
 go/no-go verdict.
 
-**Checklist — recommendations (`services/recommend/`, v1.1.0 amendment)**
+**Checklist — recommendations (`services/cloud/intelligence/recommend/`, v1.1.0 amendment)**
 - [ ] `RecommendationEngine.recommend(road_id, ctx)` satisfied by the mock's five
   deterministic rules (ZEBRA_CROSSING, SIGNAL_TIMING, DIVIDER, DRAINAGE, SPEED_CALMING)
 - [ ] Every recommendation carries `rationale` and `evidence_event_ids` — never fabricate one with neither
@@ -330,7 +330,7 @@ go/no-go verdict.
 |---|---|
 | 1 | Contracts read, `MEMBER=m2 make mine` green, both panels rendering mock data. |
 | 2 | OSM drive graph built **offline** with osmnx and pickled to `data/chennai_drive_graph.pkl`. Never fetch at request time. |
-| 3 | Observation → nearest graph edge snapping. Dwell-time filter (buses stop at bus stops — this is the trap). **Check with M5 that observations are being persisted by now** — they are memory-only in the scaffold, so `TRAFFIC_WINDOW_MINUTES` cannot span an API restart until that lands (`TODO (M5)` in `services/api/mqtt_bridge.py`). |
+| 3 | Observation → nearest graph edge snapping. Dwell-time filter (buses stop at bus stops — this is the trap). **Check with M5 that observations are being persisted by now** — they are memory-only in the scaffold, so `TRAFFIC_WINDOW_MINUTES` cannot span an API restart until that lands (`TODO (M5)` in `services/cloud/api/mqtt_bridge.py`). |
 | 4 | Density from the fundamental diagram; PCI from M1's defect events per km. `USE_REAL_TRAFFIC=true`. |
 | 5 | networkx shortest-path baseline per route, cached at startup. |
 | 6 | Edge removal → re-route → real deltas. `USE_REAL_WHATIF=true`. Diversion polyline drawn. |
@@ -342,9 +342,9 @@ go/no-go verdict.
 
 **Files you own**
 ```
-services/perception/pedestrian/**
-services/fusion/**
-services/risk/**                              (AI intelligence layer — added v1.1.0)
+services/edge/pedestrian/**
+services/cloud/consensus/**
+services/cloud/intelligence/urban_risk/**                              (AI intelligence layer — added v1.1.0)
 apps/command/src/panels/RiskPanel.tsx
 apps/command/src/panels/IntelligencePanel.tsx  (you own this one; M2 contributes)
 ```
@@ -373,7 +373,7 @@ flags: `USE_REAL_PEDESTRIAN`, `USE_REAL_FUSION`, `USE_REAL_RISK`
 **Your panel** — RiskPanel: active risk zones, school-zone count, and the
 **fusion confidence ladder**, which is the visualisation judges will interrogate.
 
-**Checklist — urban risk index (`services/risk/`, v1.1.0 amendment)**
+**Checklist — urban risk index (`services/cloud/intelligence/urban_risk/`, v1.1.0 amendment)**
 - [ ] `RiskScorer.score(road_id, ctx)` satisfied by the mock's 6-component weighted
   index (PCI 30% / congestion 20% / pedestrian density 15% / school proximity 15% /
   near-miss frequency 12% / recent incidents 8%)
@@ -402,7 +402,7 @@ flags: `USE_REAL_PEDESTRIAN`, `USE_REAL_FUSION`, `USE_REAL_RISK`
 
 **Files you own**
 ```
-services/perception/incidents/**
+services/edge/incidents/**
 apps/command/src/panels/IncidentsPanel.tsx
 ```
 
@@ -440,7 +440,7 @@ masked; it is the answer to "is this a surveillance system?"
 | 3 | Collision heuristic: converging tracks + abrupt velocity loss. Rash driving: lateral accel + lane changes. |
 | 4 | Plate crop selection (sharpest, largest, most frontal) + PaddleOCR. |
 | 5 | TN-format normalisation + confidence gate. Reject below threshold rather than publishing a guess. |
-| 6 | `USE_REAL_INCIDENTS=true` with a **real** `PLATE_HASH_SALT`. Dossier export. **Agree with M5 whether incidents persist** — nothing writes the `incidents` table today, so every dossier is lost on API restart (`TODO (M5)` in `services/api/routers/incidents.py`). Your call as the owner of the evidence chain. |
+| 6 | `USE_REAL_INCIDENTS=true` with a **real** `PLATE_HASH_SALT`. Dossier export. **Agree with M5 whether incidents persist** — nothing writes the `incidents` table today, so every dossier is lost on API restart (`TODO (M5)` in `services/cloud/api/routers/incidents.py`). Your call as the owner of the evidence chain. |
 | 7 | Freeze. Rehearse the privacy answer in two sentences. |
 
 ---
@@ -449,11 +449,11 @@ masked; it is the answer to "is this a surveillance system?"
 
 **Files you own**
 ```
-services/api/**        services/replay/**       packages/db/**
+services/cloud/api/**        services/tools/replay/**       packages/db/**
 scripts/**
 ```
 
-**Your surface** — the whole API in §6 of `services/api/README.md`. You never
+**Your surface** — the whole API in §6 of `services/cloud/api/README.md`. You never
 import anyone's implementation, only their factory. One router file per domain
 so you are never blocked on your own merge conflicts.
 
@@ -465,7 +465,7 @@ so you are never blocked on your own merge conflicts.
 | day | done by end of day |
 |---|---|
 | 1 | `make dev` works for everyone. Everyone can hit `/docs`. `make smoke` all green. |
-| 2 | **Persistence gaps** (`grep -rn "TODO (M5)" services/api`). Only `events` and `work_orders` are written at runtime — `observations`, `incidents` and `bus_positions` live in memory and vanish on restart. Batch-insert observations in `mqtt_bridge.py` (M2 needs history across a restart for `TRAFFIC_WINDOW_MINUTES`; `event_observations` has nothing to point at without it). |
+| 2 | **Persistence gaps** (`grep -rn "TODO (M5)" services/cloud/api`). Only `events` and `work_orders` are written at runtime — `observations`, `incidents` and `bus_positions` live in memory and vanish on restart. Batch-insert observations in `mqtt_bridge.py` (M2 needs history across a restart for `TRAFFIC_WINDOW_MINUTES`; `event_observations` has nothing to point at without it). |
 | 3 | **Single merge path.** `routers/events.py::merged_events()` is the one definition of "all events" — `/api/fleet`, `/api/incidents` and the WS `HELLO` payload still read `LiveState` alone and can disagree with it, the same way `open_events` did. Fix the fleet fallback first: with no replay running, `/api/fleet` returns `[]` despite 6 seeded `bus_positions`. Then WebSocket under load (6 buses × 15fps), backpressure, redis caching for `/api/roads`. |
 | 4 | Evidence storage + signed URL endpoint — M1 and M4 both need this. |
 | 5 | Work-order lifecycle, SLA breach detection, `/api/analytics/summary` off real aggregates — including `km_surveyed_today` and `incidents_today`, which are currently process-lifetime counters that reset on every `uvicorn --reload`. |

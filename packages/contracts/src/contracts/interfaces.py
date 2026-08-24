@@ -12,14 +12,14 @@ assert against.
 
     Protocol                  owner   implementation lives in
     ────────────────────────  ─────   ─────────────────────────────────────
-    DefectDetector            M1      services/perception/defects/
-    PedestrianRiskDetector    M3      services/perception/pedestrian/
-    IncidentDetector          M4      services/perception/incidents/
-    TrafficAnalyzer           M2      services/analytics/traffic/
-    EventFuser                M3      services/fusion/
-    WhatIfEngine              M2      services/whatif/
-    RiskScorer                M3      services/risk/
-    RecommendationEngine      M2      services/recommend/
+    DefectDetector            M1      services/edge/defects/
+    PedestrianRiskDetector    M3      services/edge/pedestrian/
+    IncidentDetector          M4      services/edge/incidents/
+    TrafficAnalyzer           M2      services/cloud/intelligence/traffic_analytics/
+    EventFuser                M3      services/cloud/consensus/
+    WhatIfEngine              M2      services/cloud/intelligence/whatif/
+    RiskScorer                M3      services/cloud/intelligence/urban_risk/
+    RecommendationEngine      M2      services/cloud/intelligence/recommend/
 
 The last two were added in the one-time AI intelligence layer contracts
 unfreeze — same rules apply: structural, ``@runtime_checkable``, one owner.

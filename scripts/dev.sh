@@ -36,9 +36,9 @@ echo "  │    api docs        →  http://localhost:8000/docs         │"
 echo "  └──────────────────────────────────────────────────────────┘"
 echo ""
 
-run 36 api    "$PY" -m uvicorn services.api.main:app --host 0.0.0.0 --port "${API_PORT:-8000}" --reload
+run 36 api    "$PY" -m uvicorn services.cloud.api.main:app --host 0.0.0.0 --port "${API_PORT:-8000}" --reload
 sleep 2
-run 35 replay "$PY" -m services.replay --speed "${REPLAY_SPEED:-60}" --buses "${REPLAY_BUSES:-6}" --loop
+run 35 replay "$PY" -m services.tools.replay --speed "${REPLAY_SPEED:-60}" --buses "${REPLAY_BUSES:-6}" --loop
 run 32 command npm --prefix apps/command run dev -- --host --port 5173
 run 33 field   npm --prefix apps/field   run dev -- --host --port 5174
 

@@ -123,7 +123,7 @@ async def check_redis(report: Report) -> None:
     try:
         import redis.asyncio as aioredis
 
-        from services.api.config import get_api_settings
+        from services.cloud.api.config import get_api_settings
 
         client = aioredis.from_url(get_api_settings().REDIS_URL)
         try:
@@ -146,7 +146,7 @@ def check_mqtt(report: Report) -> None:
         import paho.mqtt.client as mqtt
         from contracts import position_topic
 
-        from services.replay.config import get_replay_settings
+        from services.tools.replay.config import get_replay_settings
 
         settings = get_replay_settings()
         received: list[str] = []
@@ -202,14 +202,14 @@ def check_factories(report: Report) -> None:
         WhatIfRequest,
     )
 
-    from services.analytics.traffic import get_traffic_analyzer
-    from services.fusion import get_event_fuser
-    from services.perception.defects import get_defect_detector
-    from services.perception.incidents import get_incident_detector
-    from services.perception.pedestrian import get_pedestrian_detector
-    from services.recommend import get_recommendation_engine
-    from services.risk import get_risk_scorer
-    from services.whatif import get_whatif_engine
+    from services.cloud.consensus import get_event_fuser
+    from services.cloud.intelligence.recommend import get_recommendation_engine
+    from services.cloud.intelligence.traffic_analytics import get_traffic_analyzer
+    from services.cloud.intelligence.urban_risk import get_risk_scorer
+    from services.cloud.intelligence.whatif import get_whatif_engine
+    from services.edge.defects import get_defect_detector
+    from services.edge.incidents import get_incident_detector
+    from services.edge.pedestrian import get_pedestrian_detector
 
     hotspot = DEFECT_HOTSPOTS[0]
     meta = FrameMeta(
@@ -304,7 +304,7 @@ def check_api(report: Report) -> None:
     try:
         from fastapi.testclient import TestClient
 
-        from services.api.main import app
+        from services.cloud.api.main import app
 
         with TestClient(app) as client:
             response = client.get("/health")

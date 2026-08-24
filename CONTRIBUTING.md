@@ -11,11 +11,11 @@ One long-lived branch per person. You work on yours all week.
 
 | branch | owner | scope |
 |---|---|---|
-| `m1-defects` | M1 | `services/perception/defects/**`, `panels/DefectsPanel.tsx` |
-| `m2-traffic` | M2 | `services/analytics/traffic/**`, `services/whatif/**`, `panels/TrafficPanel.tsx`, `panels/WhatIfPanel.tsx` |
-| `m3-fusion` | M3 | `services/perception/pedestrian/**`, `services/fusion/**`, `panels/RiskPanel.tsx` |
-| `m4-incidents` | M4 | `services/perception/incidents/**`, `panels/IncidentsPanel.tsx` |
-| `m5-platform` | M5 | `services/api/**`, `services/replay/**`, `packages/db/**`, `scripts/**` |
+| `m1-defects` | M1 | `services/edge/defects/**`, `panels/DefectsPanel.tsx` |
+| `m2-traffic` | M2 | `services/cloud/intelligence/traffic_analytics/**`, `services/cloud/intelligence/whatif/**`, `panels/TrafficPanel.tsx`, `panels/WhatIfPanel.tsx` |
+| `m3-fusion` | M3 | `services/edge/pedestrian/**`, `services/cloud/consensus/**`, `panels/RiskPanel.tsx` |
+| `m4-incidents` | M4 | `services/edge/incidents/**`, `panels/IncidentsPanel.tsx` |
+| `m5-platform` | M5 | `services/cloud/api/**`, `services/tools/replay/**`, `packages/db/**`, `scripts/**` |
 | `m6-frontend` | M6 | `apps/command/src/**` (except `panels/`), `apps/field/**` |
 
 `main` is protected. **No direct pushes, by anyone, including whoever set the
@@ -34,7 +34,7 @@ git rebase main
 
 # ── during the day ──
 MEMBER=m3 make mine        # your tests, fast
-git add services/fusion    # stage only what you own
+git add services/cloud/consensus    # stage only what you own
 git commit -m "fusion: DBSCAN clustering with metre-space projection"
 
 # ── before you push ──
@@ -71,8 +71,8 @@ the time.
 One sentence.
 
 ## Files touched
-- services/fusion/impl.py
-- services/fusion/test_module.py
+- services/cloud/consensus/impl.py
+- services/cloud/consensus/test_module.py
 
 ## Flag state
 USE_REAL_FUSION: still false / now true
