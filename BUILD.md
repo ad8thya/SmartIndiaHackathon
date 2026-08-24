@@ -43,9 +43,11 @@ mock for real code is a one-line change inside one folder that no other file obs
 | **traffic** | M2 | **Working.** Twin-peaked congestion by hour-of-day, per-corridor phase shift, modulated by observed VEHICLE counts; PCI degrades from M1's defects; Greenshields speed. Clock comes from the newest observation, not wall time | **Stub** — `analyze()` raises. 2 stubs | `services/analytics/traffic/impl.py` |
 | **whatif** | M2 | **Working.** Hardcoded per-segment penalties for all 26 segments; one row per route including unaffected ones; deterministic | **Stub** — `simulate()` raises. 2 stubs | `services/whatif/impl.py` |
 | **fusion** | M3 | **Working, and largely real.** Genuine noisy-OR confidence, genuine status ladder, stable event ids, confidence-weighted centroids, worst-severity-wins, SLA clocks, `FUSABLE_CLASSES` filtering. Only the *clustering* is faked: snap-to-25 m-grid instead of DBSCAN | **Stub** — `fuse()` raises. `_fusable()` helper is real and already correct | `services/fusion/impl.py` |
-| **api** | M5 | n/a — real | **Real.** 15 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/api/**` |
+| **risk** | M3 | **Working, and the intended v1.** A real, transparent 6-component weighted index (PCI 30% / congestion 20% / pedestrian density 15% / school proximity 15% / near-miss frequency 12% / recent incidents 8%). `components` always sum to `score`; `explanation` never empty | **Stub** — `score()` raises. Learned (gradient-boosted) upgrade path documented, same explainability requirement | `services/risk/impl.py` |
+| **recommend** | M2 | **Working.** Five deterministic proximity rules off the same `RiskContext` risk reads (ZEBRA_CROSSING, SIGNAL_TIMING, DIVIDER, DRAINAGE, SPEED_CALMING) | **Stub** — `recommend()` raises. Real evidence-id lookup from postgres documented | `services/recommend/impl.py` |
+| **api** | M5 | n/a — real | **Real.** 19 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/api/**` |
 | **db** | M5 | n/a — real | **Real.** 9 tables, PostGIS Geography, 1 migration, autogenerate verified empty | `packages/db/**` |
-| **contracts** | shared | n/a | **Real, and FROZEN.** 6 Protocols, 14 models, pure fusion maths | `packages/contracts/**` (team decision) |
+| **contracts** | shared | n/a | **Real, and FROZEN (v1.1.0).** 8 Protocols, 17 models, pure fusion maths. One approved one-time amendment applied — see §10 | `packages/contracts/**` (team decision) |
 | **frontend** | M6 | n/a — real | **Real.** Command centre + field app both build and render. Panels show real mock-derived data | `apps/command/src/**`, `apps/field/**` |
 
 ### What the mocks actually produce
@@ -57,6 +59,7 @@ mock for real code is a one-line change inside one folder that no other file obs
 | Buses | 6, one per route, spread along their routes |
 | School zones | 3 |
 | Defect hotspots | 14 |
+| Near-miss junctions | 3, one per route (styled on real school zones) |
 | Seeded events | 41, spread across all 9 workflow states |
 | 3D buildings | 7,177 **real OSM** footprints, 1.72 MB, heights 3–172 m |
 
@@ -124,9 +127,9 @@ anything else. Adding an optional field or an enum member is cheap. A rename or 
 breaks five people at once. Changing it requires an ACK from every affected owner, a full
 `make test`, and `CONTRACTS_OK=1 git commit` (a pre-commit hook enforces the pause).
 
-**2 — the six Protocols ARE the module boundaries.** They are structural
+**2 — the eight Protocols ARE the module boundaries.** They are structural
 (`@runtime_checkable`), so you do **not** subclass them — write a plain class with
-matching methods.
+matching methods. The last two were added in the §10 contracts amendment.
 
 | Protocol | Owner | Method |
 |---|---|---|
@@ -136,12 +139,15 @@ matching methods.
 | `TrafficAnalyzer` | M2 | `analyze(observations) -> dict[str, RoadCondition]` |
 | `EventFuser` | M3 | `fuse(observations) -> list[Event]` |
 | `WhatIfEngine` | M2 | `simulate(req) -> list[WhatIfResult]` |
+| `RiskScorer` | M3 | `score(road_id, ctx) -> UrbanRiskScore` |
+| `RecommendationEngine` | M2 | `recommend(road_id, ctx) -> list[InfrastructureRecommendation]` |
 
-**3 — the `USE_REAL_*` flags.** Six of them, all `false` in `.env.example`.
+**3 — the `USE_REAL_*` flags.** Eight of them, all `false` in `.env.example`.
 `USE_REAL_DEFECTS`, `USE_REAL_PEDESTRIAN`, `USE_REAL_INCIDENTS`, `USE_REAL_TRAFFIC`,
-`USE_REAL_FUSION`, `USE_REAL_WHATIF`. **Flip yours only when your own tests pass.** It is
-your flag in your `.env` (gitignored) — nobody else's demo changes either way. CI fails
-the build if a `USE_REAL_*` is ever `true` in `.env.example`.
+`USE_REAL_FUSION`, `USE_REAL_WHATIF`, `USE_REAL_RISK`, `USE_REAL_RECOMMEND`. **Flip yours
+only when your own tests pass.** It is your flag in your `.env` (gitignored) — nobody
+else's demo changes either way. CI fails the build if a `USE_REAL_*` is ever `true` in
+`.env.example`.
 
 **4 — the factory pattern.** Real code, `services/perception/defects/factory.py`:
 
@@ -240,7 +246,7 @@ Settled. Do not reopen these mid-week without a team conversation.
 | **The ORM is the source of truth for schema** | Migration 0001 mirrors `models.py` exactly so `--autogenerate` yields an empty migration. If they drift, every later `make revision` carries spurious ALTERs that somebody eventually applies by accident |
 | **`server_default` kept only on `created_at`/`updated_at`** | Those 10 columns declare it in *both* the ORM and the migration, so they agree. All 23 other literal defaults were stripped — Python-side `default=` already covers Core inserts |
 | **`FUSABLE_CLASSES`: plain `PEDESTRIAN`/`VEHICLE` are analytics input, not workflow events** | Fusing them handed repair crews work orders with a 30-day SLA for a person walking, and buried real defects in the operator's list. They remain fully available as raw observations to M2 and M3 |
-| **`_SAFETY_SEVERITY` table; severity is never fabricated** | `COLLISION → LARGE`, `RASH_DRIVING`/`PEDESTRIAN_RISK → MEDIUM`. An explicit reviewable policy, not a fallback — a blanket default rendered a hit-and-run as a small blue dot beside a hairline crack. Infrastructure classes never reach the table; if one does, it raises |
+| **`_SAFETY_SEVERITY` table; severity is never fabricated** | `COLLISION → LARGE`, `RASH_DRIVING`/`PEDESTRIAN_RISK`/`NEAR_MISS → MEDIUM` (NEAR_MISS added in the §10 amendment; usually set explicitly from `min_ttc_seconds`, this is the fallback). An explicit reviewable policy, not a fallback — a blanket default rendered a hit-and-run as a small blue dot beside a hairline crack. Infrastructure classes never reach the table; if one does, it raises |
 | **Noisy-OR for confidence fusion, not averaging** | `1 − Π(1 − cᵢ)` — the probability at least one detector was right. Two 0.6 sightings give 0.84; averaging would give 0.6 and throw away the corroboration that is the entire premise. Capped at 0.999: we never claim certainty |
 | **`--tagged-only` building fetch** | Unfiltered = 146,403 footprints / **31 MB**. Filtered to those declaring `height` or `building:levels` = 7,177 / **1.72 MB**. Same visual read, 18× smaller |
 | **`buildings.geojson` is committed, not fetched at runtime** | The twin must render on a fresh clone with no network and no build step. Overpass is rate-limited and will pick your demo to fail on. 1.72 MB once, never changing |
@@ -269,23 +275,26 @@ Settled. Do not reopen these mid-week without a team conversation.
 
 | | Count | Command |
 |---|---|---|
-| Python tests | **177** | `make test-py` / `.venv/bin/pytest` |
-| Frontend tests | **23** (2 files) | `cd apps/command && npm run test -- --run` |
-| Smoke checks | **28** | `make smoke` |
+| Python tests | **245** | `make test-py` / `.venv/bin/pytest` |
+| Frontend tests | **26** (2 files) | `cd apps/command && npm run test -- --run` |
+| Smoke checks | **34** | `make smoke` |
 | Everything | | `make test` |
 
 ### Python tests by file
 
 | File | Tests |
 |---|---|
-| `packages/contracts/test_contracts.py` | 36 |
+| `packages/contracts/test_contracts.py` | 45 |
+| `services/api/test_module.py` | 38 |
 | `services/fusion/test_module.py` | 29 |
-| `services/api/test_module.py` | 28 |
+| `services/risk/test_module.py` | 20 |
 | `services/whatif/test_module.py` | 16 |
+| `services/perception/incidents/test_near_miss.py` | 15 |
+| `services/replay/test_module.py` | 15 |
 | `services/analytics/traffic/test_module.py` | 14 |
-| `services/replay/test_module.py` | 13 |
 | `services/perception/defects/test_module.py` | 12 |
 | `services/perception/incidents/test_module.py` | 12 |
+| `services/recommend/test_module.py` | 12 |
 | `services/perception/pedestrian/test_module.py` | 11 |
 | `scripts/test_pipeline.py` | 6 |
 
@@ -305,7 +314,7 @@ project dies on day six.
 
 postgres connectivity · PostGIS extension · all 9 tables · geography columns registered ·
 GIST indexes · seed data loaded · redis PING + SET/GET · MQTT connect + publish→subscribe
-roundtrip · all 6 factories returning a Protocol-conforming implementation · 8 HTTP
+roundtrip · all 8 factories returning a Protocol-conforming implementation · 12 HTTP
 endpoints · WebSocket accept · frontend deps installed · buildings cached.
 
 ### `make mine`
@@ -316,9 +325,9 @@ Runs **only your module's tests**, detecting who you are from your git branch
 | Member | Runs |
 |---|---|
 | m1 | `services/perception/defects` |
-| m2 | `services/analytics/traffic`, `services/whatif` |
-| m3 | `services/perception/pedestrian`, `services/fusion` |
-| m4 | `services/perception/incidents` |
+| m2 | `services/analytics/traffic`, `services/whatif`, `services/recommend` |
+| m3 | `services/perception/pedestrian`, `services/fusion`, `services/risk` |
+| m4 | `services/perception/incidents` (includes `near_miss.py` + its tests) |
 | m5 | `services/api`, `packages/db`, `scripts` |
 | m6 | `packages/contracts` (+ `npm run test` in `apps/command`) |
 
@@ -360,6 +369,75 @@ cdf0c40  docs: readme, contributing, per-member checklists        12 files,  +14
 
 Branches `main`, `m1-defects`, `m2-traffic`, `m3-fusion`, `m4-incidents`, `m5-platform`,
 `m6-frontend` all start from `cdf0c40`.
+
+---
+
+## 10. AI Intelligence Layer — contracts amendment (v1.1.0)
+
+**One approved, one-time unfreeze.** `packages/contracts` moved from `1.0.0` to `1.1.0`
+in a single batch, then was **re-frozen as of this commit** — the same rules in §3
+apply again from here: an amendment needs agreement from every owner it touches, and it
+does not happen twice in a sprint.
+
+### What changed, and why it stayed additive
+
+Nothing existing was renamed, removed, or had a signature changed. Every addition is one
+of the two cheap kinds §3 already permits — a new enum member or a new optional field —
+plus two entirely new Protocols, which is additive to the *set* of module boundaries, not
+a change to any existing one:
+
+| Added | Where |
+|---|---|
+| `DetectionClass.NEAR_MISS` | `enums.py` — also joined `FUSABLE_CLASSES` and `SAFETY_CLASSES` |
+| `RiskBand`, `RecommendationType` | `enums.py` — new StrEnums, not reuses of `RiskLevel` (see its docstring for why they stay separate) |
+| `RoadCondition.urban_risk_score` / `.risk_band` / `.near_miss_count_7d` | `models.py` — all optional/defaulted, existing constructions still validate |
+| `AnalyticsSummary.critical_risk_roads` / `.open_recommendations` / `.near_misses_7d` | `models.py` — same, defaulted to 0 |
+| `UrbanRiskScore`, `InfrastructureRecommendation`, `NearMissEvent` | `models.py` — 3 new wire models (14 → **17** total) |
+| `RiskContext` | `interfaces.py` — a plain dataclass, deliberately not a pydantic model: it never crosses MQTT or HTTP, only passed in-process from the API to the two new Protocols |
+| `RiskScorer`, `RecommendationEngine` | `interfaces.py` — 2 new Protocols (6 → **8** total) |
+| `USE_REAL_RISK`, `USE_REAL_RECOMMEND` | `.env.example` — both `false`, same CI guard as the other six |
+
+### The two new modules
+
+`services/risk/` (M3) and `services/recommend/` (M2) follow the identical six-file shape
+every other module uses. Neither needed a database migration or a new MQTT topic — both
+are computed per-request from `LiveState` plus static city reference data, the same way
+`TrafficAnalyzer.analyze()` and `WhatIfEngine.simulate()` already were. `RiskContext` is
+built in exactly one place (`services/api/intel_context.py`) so `/api/roads`,
+`/api/roads/{id}/risk` and the KPI strip's `critical_risk_roads` can never drift the way
+`open_events` once did (§4's fix log, F9) — see that file's docstring.
+
+`services/risk/mock.py`'s weighted index is **not a placeholder** — it is the intended v1,
+same status as `services/fusion/mock.py`'s clustering. The learned upgrade in `impl.py`
+must keep the same explainability guarantee (`components` sum to `score`, `explanation`
+never empty) or it is not an upgrade, only a different set of numbers.
+
+### Near-miss: zero new models
+
+The project's most novel feature, and the one most likely to be misbuilt by reaching for
+a new detector. It requires **ZERO new models** — the full reasoning is the TODO block at
+the top of `services/perception/incidents/impl.py`, but the one-line version: reuse the
+existing vehicle and pedestrian ByteTrack output, project both onto the ground plane with
+the calibration M1 already derives, and take a geometric time-to-collision. `TTC < 0.5s`
+is `LARGE`, `< 1.0s` is `MEDIUM`, otherwise `SMALL` — not the IRC:82-2015 table, which
+governs surface distress dimensions and does not apply here.
+
+The mock (`near_miss.py`) scripts three junctions, one per route, and emits near-misses
+two ways: as an `Observation` with `detection_class=NEAR_MISS` that flows through the
+*normal fusion path* (so a repeated near-miss escalates through the workflow ladder like
+any other event), and as the richer `NearMissEvent` (TTC, track ids, closing speed) that
+`GET /api/near-misses` serves directly — independent of the replay simulator having ever
+run, the same "ask the mock for the scripted scene" pattern `routers/incidents.py` already
+used for the hit-and-run dossier.
+
+### New endpoints and panel
+
+Four new routes in `routers/intelligence.py` (`GET /roads/{id}/risk`,
+`GET /recommendations`, `GET /near-misses`, `GET /junctions/dangerous`) — 15 → **19** HTTP
+routes. One new frontend panel, `IntelligencePanel.tsx`, registered in `Sidebar.tsx`
+exactly like the other five. Two new deck.gl layers in `MapCanvas.tsx`: near-miss markers
+(a distinct warning-diamond icon, never confusable with an event dot) and a toggleable
+risk-band layer at each road segment's centre.
 
 ---
 

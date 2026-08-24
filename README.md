@@ -203,8 +203,10 @@ type chips, evidence thumbnails, SLA countdown per row.
 ```
 services/analytics/traffic/**
 services/whatif/**
+services/recommend/**                        (AI intelligence layer — added v1.1.0)
 apps/command/src/panels/TrafficPanel.tsx
 apps/command/src/panels/WhatIfPanel.tsx
+apps/command/src/panels/IntelligencePanel.tsx (you contribute; M3 owns the file)
 ```
 
 **Your Protocols**
@@ -221,11 +223,18 @@ map must never be blank. Return a `WhatIfResult` for **every** route including
 unaffected ones — a missing row reads as "not computed", not "no impact".
 
 **Your commands** · `MEMBER=m2 make mine` · `pip install -e ".[geo]"` ·
-flags: `USE_REAL_TRAFFIC`, `USE_REAL_WHATIF`
+flags: `USE_REAL_TRAFFIC`, `USE_REAL_WHATIF`, `USE_REAL_RECOMMEND`
 
 **Your panels** — TrafficPanel: bottleneck chart, heatmap toggle, per-road
 detail with PCI bar. WhatIfPanel: road picker → close → per-route delta with a
 go/no-go verdict.
+
+**Checklist — recommendations (`services/recommend/`, v1.1.0 amendment)**
+- [ ] `RecommendationEngine.recommend(road_id, ctx)` satisfied by the mock's five
+  deterministic rules (ZEBRA_CROSSING, SIGNAL_TIMING, DIVIDER, DRAINAGE, SPEED_CALMING)
+- [ ] Every recommendation carries `rationale` and `evidence_event_ids` — never fabricate one with neither
+- [ ] Contributed to `IntelligencePanel.tsx`'s recommendations feed (priority chips + rationale)
+- [ ] `impl.py`: real evidence-id lookup from postgres, replacing the mock's fabricated uuid5 placeholders
 
 **7-day plan**
 
@@ -247,7 +256,9 @@ go/no-go verdict.
 ```
 services/perception/pedestrian/**
 services/fusion/**
+services/risk/**                              (AI intelligence layer — added v1.1.0)
 apps/command/src/panels/RiskPanel.tsx
+apps/command/src/panels/IntelligencePanel.tsx  (you own this one; M2 contributes)
 ```
 
 **Your Protocols**
@@ -269,10 +280,21 @@ Only the clustering is simplified (snap-to-grid instead of DBSCAN). You are
 upgrading it, not replacing it.
 
 **Your commands** · `MEMBER=m3 make mine` · `pip install -e ".[ml]"` ·
-flags: `USE_REAL_PEDESTRIAN`, `USE_REAL_FUSION`
+flags: `USE_REAL_PEDESTRIAN`, `USE_REAL_FUSION`, `USE_REAL_RISK`
 
 **Your panel** — RiskPanel: active risk zones, school-zone count, and the
 **fusion confidence ladder**, which is the visualisation judges will interrogate.
+
+**Checklist — urban risk index (`services/risk/`, v1.1.0 amendment)**
+- [ ] `RiskScorer.score(road_id, ctx)` satisfied by the mock's 6-component weighted
+  index (PCI 30% / congestion 20% / pedestrian density 15% / school proximity 15% /
+  near-miss frequency 12% / recent incidents 8%)
+- [ ] `components` sum to `score` within 0.01; `explanation` never empty — both are
+  enforced by `UrbanRiskScore` itself, but the mock's numbers must actually match
+- [ ] `IntelligencePanel.tsx` built: top-10 roads, score bar, expandable component
+  breakdown — the breakdown is the whole point, not decoration
+- [ ] `impl.py`: gradient-boosted learned upgrade, once repair-outcome data exists.
+  Same explainability requirement — SHAP values in, not a black box
 
 **7-day plan**
 
