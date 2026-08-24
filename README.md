@@ -34,55 +34,143 @@ city, click a road, and ask *"what happens if I close this tonight?"*
 
 ## 2 · Architecture
 
+This is the target end-to-end architecture — bus-mounted cameras through the
+central intelligence platform to the department that dispatches a repair
+crew. The scaffold in this repo implements every stage: today's edge and
+platform code runs against simulated buses and mock perception (see
+`BUILD.md` §2 for the honest per-module MOCK/REAL inventory), and the shape
+below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
+
 ```
-   ┌──────────────┐
-   │  MTC BUSES   │  6 simulated · AIS-140 telemetry · forward camera
-   │  🚌 🚌 🚌 🚌  │
-   └──────┬───────┘
-          │ frames + GPS
-          ▼
-   ┌─────────────────────────────────────────────────────┐
-   │  EDGE PERCEPTION           (runs on the bus)         │
-   │  ┌───────────┐ ┌────────────┐ ┌──────────────────┐   │
-   │  │ M1 Defects│ │M3 Pedestr. │ │ M4 Incidents+ANPR│   │
-   │  │ YOLOv8    │ │ risk / TTC │ │ track + PaddleOCR│   │
-   │  └───────────┘ └────────────┘ └──────────────────┘   │
-   └───────────────────────┬─────────────────────────────┘
-                           │  Observation · IncidentReport
-                           ▼
-                  ┌──────────────────┐
-                  │   MQTT  (1883)   │  bus/{id}/position
-                  │   mosquitto      │  bus/{id}/observation
-                  └────────┬─────────┘  bus/{id}/incident
-                           ▼
-   ┌─────────────────────────────────────────────────────┐
-   │  M5 PLATFORM                                        │
-   │   MqttBridge → LiveState → FusionLoop (every 4s)    │
-   │                               │                     │
-   │   ┌───────────────────────────┴──────────────┐      │
-   │   │  M3 EventFuser  — cluster + noisy-OR +   │      │
-   │   │  derive_status: DETECTED → AI_VERIFIED → │      │
-   │   │  AUTHORITY_NOTIFIED                      │      │
-   │   └───────────────────────────┬──────────────┘      │
-   │                               ▼                     │
-   │   PostGIS (Geography 4326)  ·  Redis  ·  FastAPI    │
-   │   M2 TrafficAnalyzer  ·  M2 WhatIfEngine            │
-   └───────────┬──────────────────────────┬──────────────┘
-         REST  │                          │  WS /ws/live
-               ▼                          ▼
-   ┌───────────────────────┐   ┌──────────────────────┐
-   │  M6 COMMAND CENTRE    │   │  M6 FIELD APP        │
-   │  MapLibre + deck.gl   │   │  Feed · Detail ·     │
-   │  3D twin, 45° pitch   │   │  Map · MyTasks       │
-   │  5 panels (M1-M4)     │   │  (also in PhoneFrame)│
-   │  :5173                │   │  :5174               │
-   └───────────────────────┘   └──────────────────────┘
+                     ┌──────────────────────────────────────────────┐
+                     │              PUBLIC TRANSPORT BUS             │
+                     └──────────────────────────────────────────────┘
+
+          Front Camera      Rear Camera      Left Camera      Right Camera
+                │                 │                 │                 │
+                └─────────────────┴─────────────────┴─────────────────┘
+                                  │
+                                  ▼
+                       RTSP / USB / IP Camera Streams
+                                  │
+                                  ▼
+                      Edge AI Device (Production)
+        (Jetson Nano / Orange Pi 5 / Raspberry Pi 5 / Industrial PC)
+                                  │
+                                  ▼
+                     Video Frame Extraction (OpenCV)
+                                  │
+                                  ▼
+                    Multi-Task AI Inference Engine
+       ┌───────────────────────────────────────────────────────────────┐
+       │ • Road Damage Detection (YOLO)                                │
+       │ • Vehicle Detection & Counting                                │
+       │ • Pedestrian Detection                                        │
+       │ • Traffic Sign Detection                                      │
+       │ • Zebra Crossing Detection                                    │
+       │ • Waterlogging Detection                                      │
+       │ • Number Plate Detection + OCR                                │
+       │ • Vehicle Tracking (ByteTrack / DeepSORT)                     │
+       └───────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                    Event Generation & Confidence Score
+                                  │
+               GPS Location + Timestamp + Bus ID + Camera ID
+                                  │
+                                  ▼
+                       Local Event Buffer (Offline Support)
+                                  │
+                                  ▼
+                           4G / 5G / WiFi Network
+                                  │
+                                  ▼
+  ═══════════════════════════════════════════════════════════════════════════
+                          CENTRAL URBAN INTELLIGENCE PLATFORM
+  ═══════════════════════════════════════════════════════════════════════════
+                                  │
+                                  ▼
+                           FastAPI / Spring Boot API
+                                  │
+                                  ▼
+                    Event Validation & Multi-Bus Consensus
+                                  │
+                                  ▼
+                          Central Database (PostgreSQL)
+                                  │
+                                  ▼
+                        AI Intelligence Layer (Novelty)
+       ┌───────────────────────────────────────────────────────────────┐
+       │ ✓ Multi-Bus Consensus Verification                            │
+       │ ✓ Road Health Score Generation                                │
+       │ ✓ Predictive Road Deterioration                               │
+       │ ✓ Congestion Prediction                                       │
+       │ ✓ Infrastructure Deficiency Detection                         │
+       │ ✓ Urban Risk Index                                            │
+       │ ✓ AI Repair Prioritization                                    │
+       │ ✓ Route Delay Analysis                                        │
+       │ ✓ Incident Severity Estimation                                │
+       │ ✓ Maintenance Recommendation Engine                           │
+       └───────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                      GIS & Digital Twin Visualization
+       ┌───────────────────────────────────────────────────────────────┐
+       │ • Live Bus Locations                                          │
+       │ • Road Health Heatmap                                         │
+       │ • Congestion Heatmap                                          │
+       │ • Accident Hotspots                                          │
+       │ • Waterlogging Map                                            │
+       │ • Infrastructure Deficiency Map                               │
+       │ • City Digital Twin                                           │
+       └───────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                    Maintenance Workflow Automation
+       ┌───────────────────────────────────────────────────────────────┐
+       │ Detect Issue                                                  │
+       │      ↓                                                        │
+       │ Generate Work Order                                           │
+       │      ↓                                                        │
+       │ Assign Department                                             │
+       │      ↓                                                        │
+       │ Track Repair Status                                           │
+       │      ↓                                                        │
+       │ Mark as Resolved                                              │
+       └───────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                              End Users
+       ┌───────────────────────────────────────────────────────────────┐
+       │ • Municipal Corporation                                       │
+       │ • Traffic Police                                              │
+       │ • Public Transport Authority                                  │
+       │ • Road Maintenance Department                                 │
+       │ • Smart City Command Center                                   │
+       │ • Emergency Response Teams                                    │
+       └───────────────────────────────────────────────────────────────┘
 ```
+
+### How this maps onto the code in this repo
+
+| Diagram stage | This repo, today |
+|---|---|
+| Cameras, edge device, frame extraction | Simulated by `services/replay` — 6 virtual buses, `FrameMeta` standing in for a real frame |
+| Multi-task inference engine | `services/perception/{defects,pedestrian,incidents}` — mocks now, one `USE_REAL_*` flag each away from real YOLO/ByteTrack/PaddleOCR |
+| Event generation + local buffer + network | `Observation` / `IncidentReport` (`packages/contracts`), published over MQTT (`bus/{id}/observation`, `bus/{id}/incident`) |
+| Central platform API | FastAPI (`services/api`), not Spring Boot, in this build |
+| Event validation & multi-bus consensus | `services/fusion` — noisy-OR confidence + the `DETECTED → AI_VERIFIED → AUTHORITY_NOTIFIED` ladder |
+| Central database | PostGIS on Postgres (`packages/db`) |
+| AI Intelligence Layer | `services/risk` (Urban Risk Index), `services/recommend` (Maintenance Recommendation Engine), `services/analytics/traffic` + `services/whatif` (congestion / route delay), `services/perception/incidents/near_miss.py` (incident + near-miss severity) |
+| GIS & Digital Twin | `apps/command` — MapLibre + deck.gl, 3D twin at 45° pitch, road-health / congestion / risk-band heatmaps |
+| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command centre and `apps/field` |
+| End users | Command centre (dispatch desk) + field app (repair crews), same roles as the department list above |
 
 **The one idea that makes six people possible:** nothing imports anybody's
 implementation. Every module boundary is a `typing.Protocol` in
 `packages/contracts`, reached through that module's `factory.py`. Swapping a
-mock for a real detector is a one-line change inside one folder.
+mock for a real detector — the step from "simulated" to "production" in the
+table above — is a one-line change inside one folder.
 
 ---
 
