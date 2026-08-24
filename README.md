@@ -140,14 +140,12 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
        └───────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
-                              End Users
+                              End Users (RBAC)
        ┌───────────────────────────────────────────────────────────────┐
-       │ • Municipal Corporation                                       │
-       │ • Traffic Police                                              │
-       │ • Public Transport Authority                                  │
-       │ • Road Maintenance Department                                 │
-       │ • Smart City Command Center                                   │
-       │ • Emergency Response Teams                                    │
+       │ • Bus Driver              • Emergency Team                    │
+       │ • Municipal Authority     • Citizen                           │
+       │ • Road Maintenance        • Urban Planner                     │
+       │ • Traffic Police          • Smart City Admin                  │
        └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -163,8 +161,26 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
 | Central database | PostGIS on Postgres (`packages/db`) |
 | AI Intelligence Layer | `services/cloud/intelligence/urban_risk` (Urban Risk Index), `services/cloud/intelligence/recommend` (Maintenance Recommendation Engine), `services/cloud/intelligence/traffic_analytics` + `services/cloud/intelligence/whatif` (congestion / route delay), `services/edge/incidents/near_miss.py` (incident + near-miss severity) |
 | GIS & Digital Twin | `apps/command` — MapLibre + deck.gl, 3D twin at 45° pitch, road-health / congestion / risk-band heatmaps |
-| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command centre and `apps/field` |
-| End users | Command centre (dispatch desk) + field app (repair crews), same roles as the department list above |
+| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command centre and `apps/field`. Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
+| End users (RBAC) | Command centre (dispatch desk) + field app (repair crews) today; `apps/roles/` reserves a folder per RBAC role for the portals below, not yet built |
+
+### Role split (RBAC) — who the product is for
+
+Distinct from "who builds it" (§5 below), this is who **uses** it once built.
+Placeholder folders only — `apps/roles/<role>/`, no app code yet.
+
+| Role | View | Report | AI Analytics | Approve | Admin |
+|---|---|---|---|---|---|
+| Bus Driver | Own Bus, Camera Status | ❌ | ❌ | ❌ | ❌ |
+| Municipal Authority | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Road Maintenance | Assigned Roads, Repair Status | Limited | — | ✅ | ❌ |
+| Traffic Police | Traffic & Incidents | Incident Actions | Traffic Analytics | ❌ | ❌ |
+| Emergency Team | Accident Alerts | Response Status | Limited | ❌ | ❌ |
+| Citizen | Public Map | Feedback | Limited | ❌ | ❌ |
+| Urban Planner | Analytics | Export | Full Analytics | ❌ | ❌ |
+| Smart City Admin | Everything | Everything | Everything | Everything | ✅ |
+
+Full matrix and per-role notes: `apps/roles/README.md`.
 
 **The one idea that makes six people possible:** nothing imports anybody's
 implementation. Every module boundary is a `typing.Protocol` in
@@ -232,6 +248,10 @@ Corollaries worth stating out loud:
 ---
 
 ## 5 · Who owns what
+
+This is the **engineering split** — six people, six code modules. Not to be
+confused with the **RBAC role split** in §2 (`apps/roles/`) — those are the
+product's end users, not dev assignments.
 
 Every module has the identical internal shape, so all six of you are looking at
 the same layout:
