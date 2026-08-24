@@ -186,7 +186,7 @@ def check_mqtt(report: Report) -> None:
 
 
 def check_factories(report: Report) -> None:
-    section("module factories (all six owners)")
+    section("module factories (all six owners, eight Protocols)")
     from citydata import DEFECT_HOTSPOTS, segment_by_id
     from contracts import (
         DefectDetector,
@@ -194,6 +194,9 @@ def check_factories(report: Report) -> None:
         FrameMeta,
         IncidentDetector,
         PedestrianRiskDetector,
+        RecommendationEngine,
+        RiskContext,
+        RiskScorer,
         TrafficAnalyzer,
         WhatIfEngine,
         WhatIfRequest,
@@ -204,6 +207,8 @@ def check_factories(report: Report) -> None:
     from services.perception.defects import get_defect_detector
     from services.perception.incidents import get_incident_detector
     from services.perception.pedestrian import get_pedestrian_detector
+    from services.recommend import get_recommendation_engine
+    from services.risk import get_risk_scorer
     from services.whatif import get_whatif_engine
 
     hotspot = DEFECT_HOTSPOTS[0]
@@ -215,6 +220,15 @@ def check_factories(report: Report) -> None:
         lon=hotspot.center[0],
         heading_deg=180.0,
         speed_kmph=25.0,
+    )
+    risk_ctx = RiskContext(
+        defect_counts={"POTHOLE": 2},
+        avg_congestion_pct=40.0,
+        pedestrian_density=4.0,
+        near_miss_count=1,
+        school_zone_distance_m=200.0,
+        pci_score=70.0,
+        recent_incident_count=0,
     )
 
     checks = [
@@ -250,6 +264,18 @@ def check_factories(report: Report) -> None:
             lambda impl: impl.simulate(
                 WhatIfRequest(closed_road_ids=[segment_by_id("SEG-27B-000").road_id])
             ),
+        ),
+        (
+            "M3 RiskScorer",
+            get_risk_scorer,
+            RiskScorer,
+            lambda impl: impl.score("SEG-27B-000", risk_ctx),
+        ),
+        (
+            "M2 RecommendationEngine",
+            get_recommendation_engine,
+            RecommendationEngine,
+            lambda impl: impl.recommend("SEG-27B-000", risk_ctx),
         ),
     ]
 
@@ -291,6 +317,10 @@ def check_api(report: Report) -> None:
                 "/api/roads/SEG-27B-000/condition",
                 "/api/incidents",
                 "/api/analytics/summary",
+                "/api/roads/SEG-27B-000/risk",
+                "/api/recommendations",
+                "/api/near-misses",
+                "/api/junctions/dangerous",
             ):
                 r = client.get(path)
                 report.add(f"GET {path}", r.status_code == 200, f"HTTP {r.status_code}")

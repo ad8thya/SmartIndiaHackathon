@@ -5,12 +5,16 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 
-from contracts import TERMINAL_STATUSES, AnalyticsSummary, WorkflowStatus
+from contracts import TERMINAL_STATUSES, AnalyticsSummary, RiskBand, WorkflowStatus
 from fastapi import APIRouter
 
 from services.analytics.traffic import get_traffic_analyzer
+from services.perception.incidents.near_miss import scripted_near_misses
+from services.recommend import get_recommendation_engine
+from services.risk import get_risk_scorer
 
 from ..deps import State
+from ..intel_context import build_risk_context
 from .events import merged_events
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -59,6 +63,22 @@ async def summary(state: State) -> AnalyticsSummary:
         else 0.0
     )
 
+    # AI intelligence layer: same RiskScorer/RecommendationEngine every other
+    # intelligence endpoint calls, through the same context builder, so this
+    # KPI strip never drifts from routers/intelligence.py the way open_events
+    # once drifted from the event panel (see merged_events above).
+    scorer = get_risk_scorer()
+    engine = get_recommendation_engine()
+    critical_risk_roads = 0
+    open_recommendations = 0
+    for road_id, condition in conditions.items():
+        ctx = build_risk_context(road_id, state, condition)
+        if scorer.score(road_id, ctx).band is RiskBand.CRITICAL:
+            critical_risk_roads += 1
+        open_recommendations += len(engine.recommend(road_id, ctx))
+
+    near_misses_7d = len(scripted_near_misses(now))
+
     return AnalyticsSummary(
         generated_at=now,
         # TODO (M5): both are process-lifetime counters wearing a "_today" name.
@@ -74,4 +94,7 @@ async def summary(state: State) -> AnalyticsSummary:
         incidents_today=incidents_today,
         sla_breaches=breaches,
         avg_resolution_hours=round(avg_resolution, 1),
+        critical_risk_roads=critical_risk_roads,
+        open_recommendations=open_recommendations,
+        near_misses_7d=near_misses_7d,
     )

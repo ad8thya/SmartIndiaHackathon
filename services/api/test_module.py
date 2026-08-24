@@ -275,6 +275,77 @@ def test_patch_rejects_a_status_outside_the_enum(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+# ── AI intelligence layer ────────────────────────────────────────────────────
+def test_road_condition_carries_the_risk_fields(client: TestClient) -> None:
+    road_id = SEGMENTS[0].road_id
+    body = client.get(f"/api/roads/{road_id}/condition").json()
+    assert 0 <= body["urban_risk_score"] <= 100
+    assert body["risk_band"] in {"LOW", "MODERATE", "HIGH", "CRITICAL"}
+    assert body["near_miss_count_7d"] >= 0
+
+
+def test_road_risk_is_populated_and_explained(client: TestClient) -> None:
+    road_id = SEGMENTS[0].road_id
+    body = client.get(f"/api/roads/{road_id}/risk").json()
+    assert body["road_id"] == road_id
+    assert 0 <= body["score"] <= 100
+    assert body["band"] in {"LOW", "MODERATE", "HIGH", "CRITICAL"}
+    assert body["explanation"], "an unexplained risk score is worthless"
+    assert sum(body["components"].values()) == pytest.approx(body["score"], abs=0.05)
+
+
+def test_unknown_road_risk_is_404(client: TestClient) -> None:
+    assert client.get("/api/roads/SEG-NOPE-000/risk").status_code == 404
+
+
+def test_recommendations_list_and_filter(client: TestClient) -> None:
+    everything = client.get("/api/recommendations").json()
+    assert isinstance(everything, list)
+    for rec in everything:
+        assert rec["rationale"]
+        assert rec["evidence_event_ids"]
+
+    by_type = client.get("/api/recommendations", params={"type": "DIVIDER"}).json()
+    assert all(rec["rec_type"] == "DIVIDER" for rec in by_type)
+
+    by_priority = client.get("/api/recommendations", params={"priority": "HIGH"}).json()
+    assert all(rec["priority"] == "HIGH" for rec in by_priority)
+
+
+def test_near_misses_returns_the_scripted_events(client: TestClient) -> None:
+    body = client.get("/api/near-misses").json()
+    assert body
+    for event in body:
+        assert event["min_ttc_seconds"] >= 0.0
+        assert event["severity"] in {"SMALL", "MEDIUM", "LARGE"}
+
+
+def test_near_misses_bbox_filter(client: TestClient) -> None:
+    inside = client.get("/api/near-misses", params={"bbox": "79.9,12.7,80.5,13.4"}).json()
+    outside = client.get("/api/near-misses", params={"bbox": "70.0,20.0,71.0,21.0"}).json()
+    assert inside and not outside
+
+
+def test_near_misses_malformed_bbox_is_422(client: TestClient) -> None:
+    assert client.get("/api/near-misses", params={"bbox": "nonsense"}).status_code == 422
+
+
+def test_near_misses_since_filter(client: TestClient) -> None:
+    from datetime import UTC, datetime
+
+    future = datetime.now(tz=UTC) + timedelta(days=1)
+    assert client.get("/api/near-misses", params={"since": future.isoformat()}).json() == []
+
+
+def test_dangerous_junctions_are_ranked_worst_first(client: TestClient) -> None:
+    body = client.get("/api/junctions/dangerous", params={"limit": 10}).json()
+    assert 0 < len(body) <= 10
+    scores = [row["risk_score"] for row in body]
+    assert scores == sorted(scores, reverse=True)
+    for row in body:
+        assert row["risk_band"] in {"LOW", "MODERATE", "HIGH", "CRITICAL"}
+
+
 # ── analytics ───────────────────────────────────────────────────────────────
 def test_analytics_summary_shape(client: TestClient) -> None:
     make_event()
@@ -304,6 +375,12 @@ def test_summary_open_events_matches_the_event_list(client: TestClient) -> None:
     # and the breakdowns are drawn from the same population
     assert sum(summary["events_by_status"].values()) == len(events)
     assert sum(summary["events_by_class"].values()) == len(events)
+
+
+def test_summary_includes_intelligence_layer_fields(client: TestClient) -> None:
+    body = client.get("/api/analytics/summary").json()
+    assert set(body) >= {"critical_risk_roads", "open_recommendations", "near_misses_7d"}
+    assert body["near_misses_7d"] >= 0
 
 
 def test_summary_counts_terminal_statuses_as_closed(client: TestClient) -> None:
