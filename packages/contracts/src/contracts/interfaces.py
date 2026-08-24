@@ -18,18 +18,26 @@ assert against.
     TrafficAnalyzer           M2      services/analytics/traffic/
     EventFuser                M3      services/fusion/
     WhatIfEngine              M2      services/whatif/
+    RiskScorer                M3      services/risk/
+    RecommendationEngine      M2      services/recommend/
+
+The last two were added in the one-time AI intelligence layer contracts
+unfreeze — same rules apply: structural, ``@runtime_checkable``, one owner.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from .models import (
     Event,
     FrameMeta,
     IncidentReport,
+    InfrastructureRecommendation,
     Observation,
     RoadCondition,
+    UrbanRiskScore,
     WhatIfRequest,
     WhatIfResult,
 )
@@ -50,9 +58,32 @@ __all__ = [
     "Frame",
     "IncidentDetector",
     "PedestrianRiskDetector",
+    "RecommendationEngine",
+    "RiskContext",
+    "RiskScorer",
     "TrafficAnalyzer",
     "WhatIfEngine",
 ]
+
+
+@dataclass(frozen=True)
+class RiskContext:
+    """Everything RiskScorer and RecommendationEngine need for one road.
+
+    A plain dataclass, not a pydantic wire model — it never crosses MQTT or
+    HTTP. The API builds one per request from LiveState plus the traffic,
+    pedestrian and incident factories, and hands it straight to both
+    Protocols in-process. Both M2 and M3 read the same instance, so their two
+    outputs are always talking about the same evidence.
+    """
+
+    defect_counts: dict[str, int]
+    avg_congestion_pct: float
+    pedestrian_density: float
+    near_miss_count: int
+    school_zone_distance_m: float | None
+    pci_score: float
+    recent_incident_count: int
 
 
 @runtime_checkable
@@ -123,3 +154,29 @@ class WhatIfEngine(Protocol):
     """
 
     def simulate(self, req: WhatIfRequest) -> list[WhatIfResult]: ...
+
+
+@runtime_checkable
+class RiskScorer(Protocol):
+    """M3 — explainable composite risk index for one road.
+
+    The returned UrbanRiskScore's ``components`` must sum to its ``score`` and
+    its ``explanation`` must never be empty — both are enforced by the model
+    itself, not left to the caller. This is a government decision-support
+    metric; an unexplained number is worthless.
+    """
+
+    def score(self, road_id: str, ctx: RiskContext) -> UrbanRiskScore: ...
+
+
+@runtime_checkable
+class RecommendationEngine(Protocol):
+    """M2 — infrastructure interventions a road's risk profile justifies.
+
+    Zero or more per road — an unremarkable road gets an empty list, not a
+    fabricated one. Every recommendation carries its own rationale and
+    evidence_event_ids; a recommendation with neither is an opinion, not
+    decision support.
+    """
+
+    def recommend(self, road_id: str, ctx: RiskContext) -> list[InfrastructureRecommendation]: ...

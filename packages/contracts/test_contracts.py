@@ -8,19 +8,27 @@ stop-the-line event, not as a test to update.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from contracts import (
     FUSABLE_CLASSES,
     INFRASTRUCTURE_CLASSES,
     MAX_FUSED_CONFIDENCE,
+    SAFETY_CLASSES,
     BBox,
     BusPosition,
     DetectionClass,
     Event,
     FrameMeta,
+    InfrastructureRecommendation,
+    NearMissEvent,
     Observation,
+    RecommendationType,
+    RiskBand,
+    RiskContext,
     Severity,
+    UrbanRiskScore,
     WorkflowStatus,
     derive_status,
     fuse_confidence,
@@ -57,16 +65,29 @@ def test_infrastructure_classes_has_exactly_eight_members() -> None:
     assert DetectionClass.VEHICLE not in INFRASTRUCTURE_CLASSES
 
 
-def test_fusable_classes_is_infrastructure_plus_the_three_safety_classes() -> None:
-    """Plain presence must never become a workflow item with an SLA clock."""
+def test_fusable_classes_is_infrastructure_plus_the_four_safety_classes() -> None:
+    """Plain presence must never become a workflow item with an SLA clock.
+
+    NEAR_MISS joined this set in the AI intelligence layer amendment — a
+    repeated near-miss at one junction is exactly the corroborated safety
+    signal this ladder exists to surface.
+    """
     assert FUSABLE_CLASSES >= INFRASTRUCTURE_CLASSES
     assert {
         DetectionClass.PEDESTRIAN_RISK,
         DetectionClass.RASH_DRIVING,
         DetectionClass.COLLISION,
+        DetectionClass.NEAR_MISS,
     } == FUSABLE_CLASSES - INFRASTRUCTURE_CLASSES
     assert DetectionClass.PEDESTRIAN not in FUSABLE_CLASSES
     assert DetectionClass.VEHICLE not in FUSABLE_CLASSES
+
+
+def test_near_miss_fuses_but_plain_pedestrian_does_not() -> None:
+    """The exact distinction the amendment is built on."""
+    assert DetectionClass.NEAR_MISS in FUSABLE_CLASSES
+    assert DetectionClass.NEAR_MISS in SAFETY_CLASSES
+    assert DetectionClass.PEDESTRIAN not in FUSABLE_CLASSES
 
 
 def test_enums_are_strings_on_the_wire() -> None:
@@ -254,3 +275,97 @@ def test_every_model_ships_a_schema_example() -> None:
     for model in (Observation, Event, BusPosition, FrameMeta, BBox):
         schema = model.model_json_schema()
         assert schema.get("examples"), f"{model.__name__} lost its json_schema_extra example"
+
+
+# ── AI intelligence layer (v1.1.0 amendment) ────────────────────────────────
+def _risk_score(**overrides: object) -> UrbanRiskScore:
+    components = {"road_damage": 21.0, "congestion": 14.2}
+    base: dict[str, object] = {
+        "road_id": "SEG-27B-014",
+        "score": sum(components.values()),
+        "band": RiskBand.HIGH,
+        "computed_at": NOW,
+        "components": components,
+        "explanation": ["5 defects, PCI 46/100 (+21.0)", "71% average congestion (+14.2)"],
+    }
+    base.update(overrides)
+    return UrbanRiskScore(**base)  # type: ignore[arg-type]
+
+
+def test_urban_risk_score_requires_components_to_sum_to_score() -> None:
+    with pytest.raises(ValidationError, match="does not match score"):
+        _risk_score(score=99.0)
+
+
+def test_urban_risk_score_tolerates_float_rounding() -> None:
+    assert _risk_score(components={"a": 10.001, "b": 10.004}, score=20.005) is not None
+
+
+def test_urban_risk_score_rejects_an_empty_explanation() -> None:
+    with pytest.raises(ValidationError):
+        _risk_score(explanation=[])
+
+
+def test_urban_risk_score_is_bounded_0_to_100() -> None:
+    with pytest.raises(ValidationError):
+        _risk_score(components={"a": 140.0}, score=140.0)
+
+
+def test_risk_band_is_a_standalone_scale_from_risk_level() -> None:
+    """RiskBand (urban risk index) and RiskLevel (traffic/PCI blend) are
+    deliberately different enums — CRITICAL sits at the top of RiskBand,
+    SEVERE at the top of RiskLevel, and neither reuses the other's members."""
+    assert {band.value for band in RiskBand} == {"LOW", "MODERATE", "HIGH", "CRITICAL"}
+    assert _risk_score(band=RiskBand.CRITICAL).band is RiskBand.CRITICAL
+
+
+def test_infrastructure_recommendation_requires_rationale_and_evidence() -> None:
+    base: dict[str, object] = {
+        "road_id": "SEG-42A-002",
+        "lat": 13.0715,
+        "lon": 80.2428,
+        "rec_type": RecommendationType.ZEBRA_CROSSING,
+        "priority": RiskBand.HIGH,
+        "rationale": ["faded zebra crossing"],
+        "evidence_event_ids": [uuid4()],
+        "detected_at": NOW,
+    }
+    assert InfrastructureRecommendation(**base) is not None  # type: ignore[arg-type]
+
+    with pytest.raises(ValidationError):
+        InfrastructureRecommendation(**{**base, "rationale": []})  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        InfrastructureRecommendation(**{**base, "evidence_event_ids": []})  # type: ignore[arg-type]
+
+
+def test_near_miss_event_ttc_is_non_negative() -> None:
+    base: dict[str, object] = {
+        "lat": 13.053,
+        "lon": 80.2559,
+        "road_id": "SEG-42A-002",
+        "ts": NOW,
+        "bus_id": "MTC-PERAMBUR-2217",
+        "vehicle_track_id": 701,
+        "pedestrian_track_id": 702,
+        "min_ttc_seconds": 0.8,
+        "closing_speed_kmph": 28.0,
+        "severity": Severity.MEDIUM,
+    }
+    assert NearMissEvent(**base).min_ttc_seconds == pytest.approx(0.8)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        NearMissEvent(**{**base, "min_ttc_seconds": -0.1})  # type: ignore[arg-type]
+
+
+def test_risk_context_is_a_plain_dataclass_not_a_wire_model() -> None:
+    """It never crosses MQTT or HTTP — no pydantic, no frozen=True ceremony."""
+    ctx = RiskContext(
+        defect_counts={"POTHOLE": 3},
+        avg_congestion_pct=42.0,
+        pedestrian_density=6.0,
+        near_miss_count=1,
+        school_zone_distance_m=80.0,
+        pci_score=55.0,
+        recent_incident_count=0,
+    )
+    assert ctx.near_miss_count == 1
+    assert not hasattr(ctx, "model_dump")

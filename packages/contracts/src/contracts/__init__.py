@@ -11,6 +11,13 @@ RULES
   2. A change here needs agreement from every owner it touches.
   3. Additive changes (new optional field, new enum member) are cheap.
      Renames and removals are not — they break five people simultaneously.
+
+AMENDMENT (v1.1.0): one approved, one-time unfreeze added the AI intelligence
+layer — NEAR_MISS, RiskBand, RecommendationType, UrbanRiskScore,
+InfrastructureRecommendation, NearMissEvent, RiskContext, RiskScorer,
+RecommendationEngine. Purely additive: no existing Protocol signature, enum
+member, or model field changed or moved. Contracts are RE-FROZEN as of this
+version — see BUILD.md for the amendment record.
 """
 
 from __future__ import annotations
@@ -23,6 +30,8 @@ from .enums import (
     STATUS_ORDER,
     TERMINAL_STATUSES,
     DetectionClass,
+    RecommendationType,
+    RiskBand,
     RiskLevel,
     Severity,
     WorkflowStatus,
@@ -42,6 +51,9 @@ from .interfaces import (
     Frame,
     IncidentDetector,
     PedestrianRiskDetector,
+    RecommendationEngine,
+    RiskContext,
+    RiskScorer,
     TrafficAnalyzer,
     WhatIfEngine,
 )
@@ -56,10 +68,13 @@ from .models import (
     FrameMeta,
     HealthStatus,
     IncidentReport,
+    InfrastructureRecommendation,
     LonLat,
+    NearMissEvent,
     Observation,
     RoadCondition,
     Route,
+    UrbanRiskScore,
     WhatIfRequest,
     WhatIfResult,
     WorkOrder,
@@ -74,7 +89,10 @@ from .topics import (
     position_topic,
 )
 
-__version__ = "1.0.0"
+#: 1.1.0 — the one-time AI intelligence layer amendment (near-miss, urban risk
+#: index, recommendations). Additive only: nothing existing renamed or removed.
+#: Re-frozen as of this version. See BUILD.md for the amendment record.
+__version__ = "1.1.0"
 
 __all__ = [
     # enums
@@ -82,6 +100,8 @@ __all__ = [
     "Severity",
     "WorkflowStatus",
     "RiskLevel",
+    "RiskBand",
+    "RecommendationType",
     "WSMessageType",
     "INFRASTRUCTURE_CLASSES",
     "SAFETY_CLASSES",
@@ -108,6 +128,11 @@ __all__ = [
     "BUS_ID_PATTERN",
     "SHA256_PATTERN",
     "REID_DIM",
+    # AI intelligence layer
+    "UrbanRiskScore",
+    "InfrastructureRecommendation",
+    "NearMissEvent",
+    "RiskContext",
     # maths
     "fuse_confidence",
     "derive_status",
@@ -123,6 +148,8 @@ __all__ = [
     "TrafficAnalyzer",
     "EventFuser",
     "WhatIfEngine",
+    "RiskScorer",
+    "RecommendationEngine",
     # mqtt
     "position_topic",
     "observation_topic",

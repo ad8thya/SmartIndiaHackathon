@@ -16,6 +16,8 @@ __all__ = [
     "STATUS_ORDER",
     "TERMINAL_STATUSES",
     "DetectionClass",
+    "RecommendationType",
+    "RiskBand",
     "RiskLevel",
     "Severity",
     "WSMessageType",
@@ -47,6 +49,11 @@ class DetectionClass(StrEnum):
     # ── incidents (M4) ─────────────────────────────────────────────────────
     RASH_DRIVING = "RASH_DRIVING"
     COLLISION = "COLLISION"
+    # ── near-miss (M4, AI intelligence layer) ───────────────────────────────
+    #: a vehicle-pedestrian conflict with no contact — TTC below threshold but
+    #: no collision. An actionable workflow event in its own right (it fuses),
+    #: not a milder shade of COLLISION.
+    NEAR_MISS = "NEAR_MISS"
 
 
 class Severity(StrEnum):
@@ -89,6 +96,39 @@ class RiskLevel(StrEnum):
     SEVERE = "SEVERE"
 
 
+class RecommendationType(StrEnum):
+    """Infrastructure interventions the recommendation engine can propose.
+
+    AI Intelligence layer — added in the one-time contracts unfreeze alongside
+    :class:`RiskBand` and :class:`UrbanRiskScore`.
+    """
+
+    ZEBRA_CROSSING = "ZEBRA_CROSSING"
+    SIGNAL_TIMING = "SIGNAL_TIMING"
+    DIVIDER = "DIVIDER"
+    SIGNAGE = "SIGNAGE"
+    STREET_LIGHT = "STREET_LIGHT"
+    SPEED_CALMING = "SPEED_CALMING"
+    DRAINAGE = "DRAINAGE"
+
+
+class RiskBand(StrEnum):
+    """Band for the composite :class:`UrbanRiskScore` (0-100).
+
+    Deliberately a separate enum from :class:`RiskLevel` rather than a reuse:
+    ``RiskLevel`` is M2's per-segment traffic/PCI blend (``SEVERE`` at the top);
+    ``RiskBand`` is the urban risk index's own scale (``CRITICAL`` at the top),
+    computed from a different, wider set of inputs (pedestrians, schools,
+    near-misses, incidents). Conflating them would make one flag mean two
+    different things depending on which endpoint you read it from.
+    """
+
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
 class WSMessageType(StrEnum):
     """Envelope discriminator for /ws/live. M5 publishes, M6 consumes."""
 
@@ -116,11 +156,17 @@ INFRASTRUCTURE_CLASSES: frozenset[DetectionClass] = frozenset(
 )
 
 #: Classes that feed the live-safety layer rather than the maintenance backlog.
+#:
+#: NEAR_MISS joined this set in the AI intelligence layer amendment: it is a
+#: point-in-time vehicle-pedestrian conflict, same shape as a collision or a
+#: pedestrian risk sighting, and should cluster at the same tight radius —
+#: two near-misses 25 m apart are two junctions, not one.
 SAFETY_CLASSES: frozenset[DetectionClass] = frozenset(
     {
         DetectionClass.PEDESTRIAN_RISK,
         DetectionClass.RASH_DRIVING,
         DetectionClass.COLLISION,
+        DetectionClass.NEAR_MISS,
     }
 )
 
@@ -131,6 +177,11 @@ SAFETY_CLASSES: frozenset[DetectionClass] = frozenset(
 #: repair crew a work order with an SLA clock for a person walking down a road,
 #: and would drown the real defects in the operator's event list.
 #:
+#: NEAR_MISS, added alongside the AI intelligence layer, IS an actionable
+#: workflow event — a repeated near-miss at one junction is exactly the kind of
+#: corroborated, escalating safety signal this ladder exists to surface, and it
+#: is the evidence the recommendation engine's SPEED_CALMING rule keys off.
+#:
 #: Both the mock and the real fuser filter on this, so the rule survives the
 #: mock → impl swap.
 FUSABLE_CLASSES: frozenset[DetectionClass] = INFRASTRUCTURE_CLASSES | frozenset(
@@ -138,6 +189,7 @@ FUSABLE_CLASSES: frozenset[DetectionClass] = INFRASTRUCTURE_CLASSES | frozenset(
         DetectionClass.PEDESTRIAN_RISK,
         DetectionClass.RASH_DRIVING,
         DetectionClass.COLLISION,
+        DetectionClass.NEAR_MISS,
     }
 )
 

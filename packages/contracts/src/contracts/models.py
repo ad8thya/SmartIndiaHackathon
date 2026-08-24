@@ -23,6 +23,8 @@ from pydantic import (
 from .enums import (
     INFRASTRUCTURE_CLASSES,
     DetectionClass,
+    RecommendationType,
+    RiskBand,
     RiskLevel,
     Severity,
     WorkflowStatus,
@@ -40,10 +42,13 @@ __all__ = [
     "FrameMeta",
     "HealthStatus",
     "IncidentReport",
+    "InfrastructureRecommendation",
     "LonLat",
+    "NearMissEvent",
     "Observation",
     "RoadCondition",
     "Route",
+    "UrbanRiskScore",
     "WSMessage",
     "WhatIfRequest",
     "WhatIfResult",
@@ -398,6 +403,10 @@ class RoadCondition(_Frozen):
     defect_counts: dict[str, int] = Field(default_factory=dict)
     bus_delay_min: float = 0.0
     risk_level: RiskLevel = RiskLevel.LOW
+    #: AI intelligence layer — populated by M3's RiskScorer, None until scored.
+    urban_risk_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    risk_band: RiskBand | None = None
+    near_miss_count_7d: int = Field(default=0, ge=0)
 
     model_config = ConfigDict(
         frozen=True,
@@ -414,6 +423,176 @@ class RoadCondition(_Frozen):
                     "defect_counts": {"POTHOLE": 6, "ALLIGATOR_CRACK": 2},
                     "bus_delay_min": 9.5,
                     "risk_level": "HIGH",
+                    "urban_risk_score": 62.4,
+                    "risk_band": "HIGH",
+                    "near_miss_count_7d": 2,
+                }
+            ]
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI intelligence layer — urban risk index, recommendations, near-misses
+#
+# Added in the one-time contracts unfreeze. See BUILD.md for the amendment
+# record; contracts are re-frozen as of that commit.
+# ─────────────────────────────────────────────────────────────────────────────
+class UrbanRiskScore(_Frozen):
+    """Explainable composite risk index for one road (0-100).
+
+    This is a government decision-support metric — an unexplained number is
+    worthless to an operator who has to justify a work order to a municipal
+    engineer. So the model enforces its own explainability at the type level:
+    ``components`` must sum to ``score``, and ``explanation`` may never be
+    empty. Both are checked below, not left to the caller's discipline.
+    """
+
+    road_id: str
+    score: float = Field(ge=0.0, le=100.0)
+    band: RiskBand
+    computed_at: datetime
+    #: named contributions (e.g. "road_damage", "school_proximity") — must sum
+    #: to `score` within 0.01
+    components: dict[str, float]
+    #: human-readable reasons, e.g. "5 potholes (+18)", "school within 40m (+22)"
+    explanation: list[str] = Field(min_length=1)
+
+    _aware = field_validator("computed_at")(_require_aware)
+
+    @model_validator(mode="after")
+    def _components_sum_to_score(self) -> UrbanRiskScore:
+        total = sum(self.components.values())
+        if abs(total - self.score) > 0.01:
+            raise ValueError(
+                f"components sum to {total:.4f}, which does not match score "
+                f"{self.score:.4f} (tolerance 0.01) — every point of the score "
+                f"must be attributable to a named component"
+            )
+        return self
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "road_id": "SEG-27B-014",
+                    "score": 62.4,
+                    "band": "HIGH",
+                    "computed_at": "2026-08-21T09:14:03+05:30",
+                    "components": {
+                        "road_damage": 21.0,
+                        "congestion": 14.2,
+                        "pedestrian_density": 9.0,
+                        "school_proximity": 12.6,
+                        "near_miss_frequency": 4.0,
+                        "recent_incidents": 1.6,
+                    },
+                    "explanation": [
+                        "5 defects, PCI 46/100 (+21.0)",
+                        "71% average congestion (+14.2)",
+                        "9 pedestrian sightings nearby (+9.0)",
+                        "school zone 40m away (+12.6)",
+                        "1 near-miss event(s) in 7d (+4.0)",
+                        "1 recent incident(s) (+1.6)",
+                    ],
+                }
+            ]
+        },
+    )
+
+
+class InfrastructureRecommendation(_Frozen):
+    """One proposed intervention for a road, with the evidence behind it.
+
+    Zero or more per road. A recommendation with no rationale or no evidence
+    is an opinion, not a decision-support output — both are required.
+    """
+
+    rec_id: UUID = Field(default_factory=uuid4)
+    road_id: str
+    lat: Latitude
+    lon: Longitude
+    rec_type: RecommendationType
+    priority: RiskBand
+    rationale: list[str] = Field(min_length=1)
+    evidence_event_ids: list[UUID] = Field(min_length=1)
+    estimated_beneficiaries: int | None = Field(default=None, ge=0)
+    detected_at: datetime
+
+    _aware = field_validator("detected_at")(_require_aware)
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "rec_id": "6c5b94b1-35ad-49bb-b118-8e8fc24abf80",
+                    "road_id": "SEG-42A-002",
+                    "lat": 13.0715,
+                    "lon": 80.2428,
+                    "rec_type": "ZEBRA_CROSSING",
+                    "priority": "HIGH",
+                    "rationale": [
+                        "faded zebra crossing on this road",
+                        "school zone 62m away",
+                        "elevated pedestrian sightings nearby",
+                    ],
+                    "evidence_event_ids": ["3f2504e0-4f89-41d3-9a0c-0305e82c3301"],
+                    "estimated_beneficiaries": 340,
+                    "detected_at": "2026-08-21T09:14:03+05:30",
+                }
+            ]
+        },
+    )
+
+
+class NearMissEvent(_Frozen):
+    """A vehicle-pedestrian conflict with no contact — the TTC metric M4 emits.
+
+    Distinct from :class:`IncidentReport`: an incident is something that
+    happened (a collision, rash driving); a near-miss is something that
+    *almost* happened, quantified by ``min_ttc_seconds``. It still fuses into
+    the normal workflow as ``DetectionClass.NEAR_MISS`` — see
+    :data:`~contracts.enums.FUSABLE_CLASSES`.
+    """
+
+    nm_id: UUID = Field(default_factory=uuid4)
+    lat: Latitude
+    lon: Longitude
+    road_id: str
+    ts: datetime
+    bus_id: str = Field(pattern=BUS_ID_PATTERN)
+    vehicle_track_id: int = Field(ge=0)
+    pedestrian_track_id: int = Field(ge=0)
+    #: the core metric — seconds to collision at closest approach
+    min_ttc_seconds: float = Field(ge=0.0)
+    closing_speed_kmph: float = Field(ge=0.0, le=200.0)
+    severity: Severity
+    evidence_uri: str | None = None
+
+    _aware = field_validator("ts")(_require_aware)
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "nm_id": "9c5b94b1-35ad-49bb-b118-8e8fc24abf80",
+                    "lat": 13.0530,
+                    "lon": 80.2559,
+                    "road_id": "SEG-42A-002",
+                    "ts": "2026-08-21T08:12:41+05:30",
+                    "bus_id": "MTC-PERAMBUR-2217",
+                    "vehicle_track_id": 701,
+                    "pedestrian_track_id": 702,
+                    "min_ttc_seconds": 0.8,
+                    "closing_speed_kmph": 28.0,
+                    "severity": "MEDIUM",
+                    "evidence_uri": "s3://urban-twin/evidence/near-miss-gopalapuram-signal.jpg",
                 }
             ]
         },
@@ -582,6 +761,11 @@ class AnalyticsSummary(_Frozen):
     incidents_today: int = Field(ge=0)
     sla_breaches: int = Field(ge=0)
     avg_resolution_hours: float = Field(default=0.0, ge=0.0)
+    #: AI intelligence layer — roads at RiskBand.CRITICAL right now
+    critical_risk_roads: int = Field(default=0, ge=0)
+    #: open (non-implemented) InfrastructureRecommendations across all roads
+    open_recommendations: int = Field(default=0, ge=0)
+    near_misses_7d: int = Field(default=0, ge=0)
 
     _aware = field_validator("generated_at")(_require_aware)
 
