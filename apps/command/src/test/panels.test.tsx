@@ -18,6 +18,7 @@ import { TrafficPanel } from '../panels/TrafficPanel';
 import { WhatIfPanel } from '../panels/WhatIfPanel';
 import { RiskPanel } from '../panels/RiskPanel';
 import { IncidentsPanel } from '../panels/IncidentsPanel';
+import { IntelligencePanel } from '../panels/IntelligencePanel';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import type { PanelProps, RoadCondition, UTEvent } from '../lib/types';
 
@@ -51,6 +52,9 @@ const ROAD: RoadCondition = {
   defect_counts: { POTHOLE: 6 },
   bus_delay_min: 9.5,
   risk_level: 'HIGH',
+  urban_risk_score: 62.4,
+  risk_band: 'HIGH',
+  near_miss_count_7d: 1,
 };
 
 const POPULATED: PanelProps = {
@@ -66,6 +70,7 @@ const PANELS = [
   ['WhatIfPanel (M2)', WhatIfPanel],
   ['RiskPanel (M3)', RiskPanel],
   ['IncidentsPanel (M4)', IncidentsPanel],
+  ['IntelligencePanel (M3)', IntelligencePanel],
 ] as const;
 
 describe('every panel honours the shared PanelProps contract', () => {

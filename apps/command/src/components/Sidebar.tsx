@@ -8,7 +8,7 @@
  *     nothing else in this directory
  */
 
-import { AlertTriangle, Activity, GitBranch, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { AlertTriangle, Activity, GitBranch, Sparkles, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ErrorBoundary } from './ErrorBoundary';
 import type { PanelProps } from '../lib/types';
@@ -18,6 +18,7 @@ import { TrafficPanel } from '../panels/TrafficPanel';
 import { WhatIfPanel } from '../panels/WhatIfPanel';
 import { RiskPanel } from '../panels/RiskPanel';
 import { IncidentsPanel } from '../panels/IncidentsPanel';
+import { IntelligencePanel } from '../panels/IntelligencePanel';
 
 interface Tab {
   id: string;
@@ -35,6 +36,7 @@ const TABS: Tab[] = [
   { id: 'whatif', label: 'What-if', owner: 'M2', icon: <GitBranch size={14} />, Component: WhatIfPanel, selects: 'road' },
   { id: 'risk', label: 'Risk', owner: 'M3', icon: <AlertTriangle size={14} />, Component: RiskPanel, selects: 'event' },
   { id: 'incidents', label: 'Incidents', owner: 'M4', icon: <ShieldAlert size={14} />, Component: IncidentsPanel, selects: 'event' },
+  { id: 'intelligence', label: 'Intelligence', owner: 'M3', icon: <Sparkles size={14} />, Component: IntelligencePanel, selects: 'road' },
 ];
 
 export function Sidebar() {

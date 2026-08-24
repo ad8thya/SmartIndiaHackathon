@@ -7,6 +7,7 @@ import {
   AlertOctagon,
   Bus,
   Flame,
+  Gauge,
   Layers,
   Radio,
   Route as RouteIcon,
@@ -47,19 +48,23 @@ export function TopBar() {
   const showHeatmap = useStore((s) => s.showHeatmap);
   const showBuildings = useStore((s) => s.showBuildings);
   const showPhone = useStore((s) => s.showPhone);
+  const showRiskLayer = useStore((s) => s.showRiskLayer);
   const toggleHeatmap = useStore((s) => s.toggleHeatmap);
   const toggleBuildings = useStore((s) => s.toggleBuildings);
   const togglePhone = useStore((s) => s.togglePhone);
+  const toggleRiskLayer = useStore((s) => s.toggleRiskLayer);
   const refreshSummary = useStore((s) => s.refreshSummary);
   const refreshRoads = useStore((s) => s.refreshRoads);
+  const refreshIntelligence = useStore((s) => s.refreshIntelligence);
 
   useEffect(() => {
     const timer = setInterval(() => {
       void refreshSummary();
       void refreshRoads();
+      void refreshIntelligence();
     }, 8000);
     return () => clearInterval(timer);
-  }, [refreshRoads, refreshSummary]);
+  }, [refreshIntelligence, refreshRoads, refreshSummary]);
 
   const connectionTone =
     connection === 'open'
@@ -110,6 +115,9 @@ export function TopBar() {
         </ToggleButton>
         <ToggleButton active={showHeatmap} onClick={toggleHeatmap} title="Congestion heatmap">
           <Flame size={15} />
+        </ToggleButton>
+        <ToggleButton active={showRiskLayer} onClick={toggleRiskLayer} title="Urban risk bands">
+          <Gauge size={15} />
         </ToggleButton>
         <ToggleButton active={showPhone} onClick={togglePhone} title="Field app (phone)">
           <Smartphone size={15} />

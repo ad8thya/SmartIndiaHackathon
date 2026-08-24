@@ -23,9 +23,24 @@ export type DetectionClass =
   | 'PEDESTRIAN'
   | 'PEDESTRIAN_RISK'
   | 'RASH_DRIVING'
-  | 'COLLISION';
+  | 'COLLISION'
+  | 'NEAR_MISS';
 
 export type Severity = 'SMALL' | 'MEDIUM' | 'LARGE';
+
+/** AI intelligence layer — contracts v1.1.0. Distinct from RiskLevel (M2's
+ * traffic/PCI blend, top band SEVERE): this is the urban risk index's own
+ * scale, top band CRITICAL. */
+export type RiskBand = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+
+export type RecommendationType =
+  | 'ZEBRA_CROSSING'
+  | 'SIGNAL_TIMING'
+  | 'DIVIDER'
+  | 'SIGNAGE'
+  | 'STREET_LIGHT'
+  | 'SPEED_CALMING'
+  | 'DRAINAGE';
 
 export type WorkflowStatus =
   | 'DETECTED'
@@ -154,6 +169,9 @@ export interface RoadCondition {
   defect_counts: Record<string, number>;
   bus_delay_min: number;
   risk_level: RiskLevel;
+  urban_risk_score: number | null;
+  risk_band: RiskBand | null;
+  near_miss_count_7d: number;
 }
 
 export interface WhatIfRequest {
@@ -202,6 +220,59 @@ export interface AnalyticsSummary {
   incidents_today: number;
   sla_breaches: number;
   avg_resolution_hours: number;
+  critical_risk_roads: number;
+  open_recommendations: number;
+  near_misses_7d: number;
+}
+
+// ── AI intelligence layer ────────────────────────────────────────────────────
+export interface UrbanRiskScore {
+  road_id: string;
+  score: number;
+  band: RiskBand;
+  computed_at: string;
+  /** named contributions — must sum to `score` */
+  components: Record<string, number>;
+  /** human-readable reasons, e.g. "5 potholes (+18)" — never empty */
+  explanation: string[];
+}
+
+export interface InfrastructureRecommendation {
+  rec_id: string;
+  road_id: string;
+  lat: number;
+  lon: number;
+  rec_type: RecommendationType;
+  priority: RiskBand;
+  rationale: string[];
+  evidence_event_ids: string[];
+  estimated_beneficiaries: number | null;
+  detected_at: string;
+}
+
+export interface NearMissEvent {
+  nm_id: string;
+  lat: number;
+  lon: number;
+  road_id: string;
+  ts: string;
+  bus_id: string;
+  vehicle_track_id: number;
+  pedestrian_track_id: number;
+  min_ttc_seconds: number;
+  closing_speed_kmph: number;
+  severity: Severity;
+  evidence_uri: string | null;
+}
+
+export interface DangerousJunction {
+  road_id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  risk_score: number;
+  risk_band: RiskBand;
+  near_miss_count_7d: number;
 }
 
 export interface HealthStatus {

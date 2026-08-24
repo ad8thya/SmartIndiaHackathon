@@ -25,8 +25,29 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useStore } from '../store/useStore';
 import { loadBuildings } from '../lib/api';
 import { INITIAL_VIEW, OFFLINE_DARK, resolveMapStyle } from '../lib/mapStyle';
-import { congestionColor, hexToRgba, statusColor } from '../lib/colors';
-import type { BusPosition, GeoJsonFeatureCollection, LonLat, UTEvent } from '../lib/types';
+import { RISK_BAND_HEX, congestionColor, hexToRgba, statusColor } from '../lib/colors';
+import type {
+  BusPosition,
+  GeoJsonFeatureCollection,
+  LonLat,
+  NearMissEvent,
+  RoadCondition,
+  UTEvent,
+} from '../lib/types';
+
+/** A warning-diamond SVG — deliberately distinct from the incident/event dots
+ * so a near-miss never reads as "just another pothole pin". */
+const NEAR_MISS_ICON =
+  'data:image/svg+xml;base64,' +
+  btoa(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+      <rect x="14" y="14" width="36" height="36" rx="6" fill="#f59e0b" fill-opacity="0.25"
+        transform="rotate(45 32 32)"/>
+      <rect x="18" y="18" width="28" height="28" rx="4" fill="#1c1206" stroke="#f59e0b"
+        stroke-width="3" transform="rotate(45 32 32)"/>
+      <path d="M32 22 L32 36 M32 42 L32 43" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+    </svg>`,
+  );
 
 /** A bus SVG baked into a data URI — no network, no sprite sheet. */
 const BUS_ICON =
@@ -88,7 +109,10 @@ export function MapCanvas() {
   const buses = useStore((s) => s.busList());
   const showHeatmap = useStore((s) => s.showHeatmap);
   const showBuildings = useStore((s) => s.showBuildings);
+  const showRiskLayer = useStore((s) => s.showRiskLayer);
+  const nearMisses = useStore((s) => s.nearMisses);
   const selectedEventId = useStore((s) => s.selectedEventId);
+  const selectedRoadId = useStore((s) => s.selectedRoadId);
   const selectRoad = useStore((s) => s.selectRoad);
   const selectEvent = useStore((s) => s.selectEvent);
 
@@ -203,6 +227,48 @@ export function MapCanvas() {
       );
     }
 
+    // 3.5 ── urban risk bands per road, toggleable (mutually legible against
+    // the congestion heatmap — both colour the same geometry differently, so
+    // this is a separate toggle, not layered underneath it)
+    if (showRiskLayer && roads.length) {
+      list.push(
+        new ScatterplotLayer<RoadCondition & { position: LonLat }>({
+          id: 'risk-bands',
+          data: roads
+            .filter((road) => road.risk_band)
+            .map((road) => ({ ...road, position: roadCenter(road.road_id, routes) })),
+          getPosition: (d) => d.position,
+          getFillColor: (d) =>
+            hexToRgba(RISK_BAND_HEX[d.risk_band!], d.road_id === selectedRoadId ? 255 : 190),
+          getLineColor: (d) =>
+            d.road_id === selectedRoadId ? [255, 255, 255, 255] : hexToRgba('#0b1220', 160),
+          getRadius: (d) => (d.risk_band === 'CRITICAL' ? 90 : d.risk_band === 'HIGH' ? 65 : 45),
+          radiusMinPixels: 5,
+          radiusMaxPixels: 26,
+          stroked: true,
+          lineWidthMinPixels: 1,
+          pickable: true,
+          updateTriggers: { getFillColor: selectedRoadId, getLineColor: selectedRoadId },
+          onHover: (info: PickingInfo) => {
+            const road = info.object as RoadCondition | null;
+            setHover(
+              road && info.x != null
+                ? {
+                    x: info.x,
+                    y: info.y ?? 0,
+                    text: `${road.name} · risk ${road.urban_risk_score?.toFixed(0) ?? '—'} (${road.risk_band})`,
+                  }
+                : null,
+            );
+          },
+          onClick: (info: PickingInfo) => {
+            const road = info.object as RoadCondition | null;
+            if (road) selectRoad(road.road_id);
+          },
+        }),
+      );
+    }
+
     // 4 ── events, colour by workflow status: grey → amber → green
     list.push(
       new ScatterplotLayer<UTEvent>({
@@ -241,6 +307,39 @@ export function MapCanvas() {
         updateTriggers: { getFillColor: selectedEventId, getRadius: selectedEventId },
       }),
     );
+
+    // 4.5 ── near-miss markers — a distinct warning-diamond icon, never
+    // confusable with the status-coloured event dots or the incident feed
+    if (nearMisses.length) {
+      list.push(
+        new IconLayer<NearMissEvent>({
+          id: 'near-misses',
+          data: nearMisses,
+          getPosition: (d) => [d.lon, d.lat],
+          getIcon: () => ({ url: NEAR_MISS_ICON, width: 64, height: 64, anchorY: 32 }),
+          getSize: (d) => (d.severity === 'LARGE' ? 34 : d.severity === 'MEDIUM' ? 28 : 22),
+          sizeMinPixels: 16,
+          sizeMaxPixels: 34,
+          pickable: true,
+          onHover: (info: PickingInfo) => {
+            const nm = info.object as NearMissEvent | null;
+            setHover(
+              nm && info.x != null
+                ? {
+                    x: info.x,
+                    y: info.y ?? 0,
+                    text: `Near miss · TTC ${nm.min_ttc_seconds.toFixed(1)}s · ${nm.closing_speed_kmph.toFixed(0)} km/h · ${nm.bus_id}`,
+                  }
+                : null,
+            );
+          },
+          onClick: (info: PickingInfo) => {
+            const nm = info.object as NearMissEvent | null;
+            if (nm) selectRoad(nm.road_id);
+          },
+        }),
+      );
+    }
 
     // 5 ── the fleet, on top of everything
     list.push(
@@ -287,14 +386,17 @@ export function MapCanvas() {
   }, [
     buildings,
     events,
+    nearMisses,
     roads,
     routes,
     routeCongestion,
     selectEvent,
     selectRoad,
     selectedEventId,
+    selectedRoadId,
     showBuildings,
     showHeatmap,
+    showRiskLayer,
     smoothedBuses,
   ]);
 
@@ -337,6 +439,7 @@ function roadCenter(roadId: string, routes: { route_id: string; polyline: LonLat
 
 function MapLegend() {
   const showHeatmap = useStore((s) => s.showHeatmap);
+  const showRiskLayer = useStore((s) => s.showRiskLayer);
   return (
     <div className="pointer-events-none absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-ink-800/85 px-3 py-2.5 text-[11px] text-slate-300 backdrop-blur">
       <div className="mb-1.5 font-semibold uppercase tracking-wider text-slate-400">
@@ -362,6 +465,30 @@ function MapLegend() {
           <div className="h-1.5 w-28 rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500" />
         </div>
       )}
+      {showRiskLayer && (
+        <div className="mt-2 border-t border-white/10 pt-2">
+          <div className="mb-1 font-semibold uppercase tracking-wider text-slate-400">
+            Urban risk band
+          </div>
+          <div className="flex flex-col gap-1">
+            {[
+              [RISK_BAND_HEX.LOW, 'Low'],
+              [RISK_BAND_HEX.MODERATE, 'Moderate'],
+              [RISK_BAND_HEX.HIGH, 'High'],
+              [RISK_BAND_HEX.CRITICAL, 'Critical'],
+            ].map(([color, label]) => (
+              <div key={label} className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
+        <span className="flex h-2.5 w-2.5 items-center justify-center rounded-sm border border-amber-400 bg-amber-500/25" />
+        <span>Near miss</span>
+      </div>
     </div>
   );
 }

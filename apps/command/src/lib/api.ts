@@ -9,10 +9,16 @@
 import type {
   AnalyticsSummary,
   BusPosition,
+  DangerousJunction,
   GeoJsonFeatureCollection,
   HealthStatus,
   IncidentReport,
+  InfrastructureRecommendation,
+  NearMissEvent,
+  RecommendationType,
+  RiskBand,
   RoadCondition,
+  UrbanRiskScore,
   UTEvent,
   UTRoute,
   WhatIfRequest,
@@ -105,6 +111,19 @@ export const api = {
     request<IncidentReport[]>(`/api/incidents${query(params)}`),
 
   summary: () => request<AnalyticsSummary>('/api/analytics/summary'),
+
+  // ── AI intelligence layer ────────────────────────────────────────────────
+  roadRisk: (roadId: string) => request<UrbanRiskScore>(`/api/roads/${roadId}/risk`),
+
+  recommendations: (
+    params: { [key: string]: unknown; type?: RecommendationType; priority?: RiskBand; road_id?: string } = {},
+  ) => request<InfrastructureRecommendation[]>(`/api/recommendations${query(params)}`),
+
+  nearMisses: (params: { [key: string]: unknown; bbox?: string; since?: string } = {}) =>
+    request<NearMissEvent[]>(`/api/near-misses${query(params)}`),
+
+  dangerousJunctions: (limit = 10) =>
+    request<DangerousJunction[]>(`/api/junctions/dangerous${query({ limit })}`),
 };
 
 /** Building footprints for the 3D twin. Cached to disk at build time — this

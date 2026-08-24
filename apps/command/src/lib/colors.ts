@@ -5,7 +5,7 @@
  * different ambers and the map would disagree with the sidebar.
  */
 
-import type { DetectionClass, RiskLevel, Severity, WorkflowStatus } from './types';
+import type { DetectionClass, RiskBand, RiskLevel, Severity, WorkflowStatus } from './types';
 
 export type RGBA = [number, number, number, number];
 
@@ -47,6 +47,15 @@ export const RISK_HEX: Record<RiskLevel, string> = {
   SEVERE: '#ef4444',
 };
 
+/** AI intelligence layer's own scale — distinct from RiskLevel above (M2's
+ * traffic/PCI blend). Top band is CRITICAL, not SEVERE. */
+export const RISK_BAND_HEX: Record<RiskBand, string> = {
+  LOW: '#22c55e',
+  MODERATE: '#facc15',
+  HIGH: '#f97316',
+  CRITICAL: '#dc2626',
+};
+
 export const CLASS_LABEL: Record<DetectionClass, string> = {
   POTHOLE: 'Pothole',
   LONGITUDINAL_CRACK: 'Longitudinal crack',
@@ -61,6 +70,7 @@ export const CLASS_LABEL: Record<DetectionClass, string> = {
   PEDESTRIAN_RISK: 'Pedestrian at risk',
   RASH_DRIVING: 'Rash driving',
   COLLISION: 'Collision',
+  NEAR_MISS: 'Near miss',
 };
 
 export function hexToRgba(hex: string, alpha = 255): RGBA {
@@ -115,4 +125,13 @@ export function riskChipClass(risk: RiskLevel): string {
     HIGH: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
     SEVERE: 'bg-red-500/15 text-red-300 border-red-500/30',
   }[risk];
+}
+
+export function riskBandChipClass(band: RiskBand): string {
+  return {
+    LOW: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    MODERATE: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30',
+    HIGH: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+    CRITICAL: 'bg-red-500/15 text-red-300 border-red-500/30',
+  }[band];
 }

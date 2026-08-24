@@ -12,10 +12,14 @@ import { LiveSocket, type ConnectionState } from '../lib/ws';
 import type {
   AnalyticsSummary,
   BusPosition,
+  DangerousJunction,
   DetectionClass,
   IncidentReport,
+  InfrastructureRecommendation,
+  NearMissEvent,
   RoadCondition,
   Severity,
+  UrbanRiskScore,
   UTEvent,
   UTRoute,
   WSMessage,
@@ -58,6 +62,13 @@ interface Store {
   whatIf: WhatIfResult[];
   ticker: TickerEntry[];
 
+  // ── AI intelligence layer ─────────────────────────────────────────────────
+  dangerousJunctions: DangerousJunction[];
+  recommendations: InfrastructureRecommendation[];
+  nearMisses: NearMissEvent[];
+  /** lazily populated per road — see IntelligencePanel's expandable rows */
+  riskDetails: Record<string, UrbanRiskScore>;
+
   // ── ui ──────────────────────────────────────────────────────────────────
   selectedEventId: string | null;
   selectedRoadId: string | null;
@@ -66,6 +77,7 @@ interface Store {
   showHeatmap: boolean;
   showBuildings: boolean;
   showPhone: boolean;
+  showRiskLayer: boolean;
   connection: ConnectionState;
   lastError: string | null;
   loading: boolean;
@@ -77,6 +89,8 @@ interface Store {
   refreshRoads: () => Promise<void>;
   refreshSummary: () => Promise<void>;
   refreshIncidents: () => Promise<void>;
+  refreshIntelligence: () => Promise<void>;
+  fetchRoadRisk: (roadId: string) => Promise<void>;
   runWhatIf: (closedRoadIds: string[], reason?: string) => Promise<void>;
   advanceStatus: (eventId: string, status: WorkflowStatus, team?: string, notes?: string) => Promise<void>;
 
@@ -88,6 +102,7 @@ interface Store {
   toggleHeatmap: () => void;
   toggleBuildings: () => void;
   togglePhone: () => void;
+  toggleRiskLayer: () => void;
 
   // ── derived ─────────────────────────────────────────────────────────────
   visibleEvents: () => UTEvent[];
@@ -112,6 +127,11 @@ export const useStore = create<Store>((set, get) => ({
   whatIf: [],
   ticker: [],
 
+  dangerousJunctions: [],
+  recommendations: [],
+  nearMisses: [],
+  riskDetails: {},
+
   selectedEventId: null,
   selectedRoadId: null,
   activePanel: 'defects',
@@ -119,6 +139,7 @@ export const useStore = create<Store>((set, get) => ({
   showHeatmap: false,
   showBuildings: true,
   showPhone: false,
+  showRiskLayer: false,
   connection: 'closed',
   lastError: null,
   loading: true,
@@ -148,6 +169,9 @@ export const useStore = create<Store>((set, get) => ({
       // the map still renders — it just has nothing on it yet
       set({ lastError: (error as Error).message, loading: false });
     }
+    // independent of the critical path above — a slow intelligence layer must
+    // not hold up the map or the event feed
+    void get().refreshIntelligence();
   },
 
   connect() {
@@ -248,6 +272,28 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
+  async refreshIntelligence() {
+    try {
+      const [dangerousJunctions, recommendations, nearMisses] = await Promise.all([
+        api.dangerousJunctions(10),
+        api.recommendations(),
+        api.nearMisses(),
+      ]);
+      set({ dangerousJunctions, recommendations, nearMisses });
+    } catch {
+      /* the panel keeps whatever it last had */
+    }
+  },
+
+  async fetchRoadRisk(roadId) {
+    try {
+      const detail = await api.roadRisk(roadId);
+      set({ riskDetails: { ...get().riskDetails, [roadId]: detail } });
+    } catch {
+      /* the row just stays collapsed */
+    }
+  },
+
   async runWhatIf(closedRoadIds, reason) {
     try {
       set({ whatIf: await api.simulate({ closed_road_ids: closedRoadIds, reason }) });
@@ -283,6 +329,7 @@ export const useStore = create<Store>((set, get) => ({
   toggleHeatmap: () => set({ showHeatmap: !get().showHeatmap }),
   toggleBuildings: () => set({ showBuildings: !get().showBuildings }),
   togglePhone: () => set({ showPhone: !get().showPhone }),
+  toggleRiskLayer: () => set({ showRiskLayer: !get().showRiskLayer }),
 
   // ── derived ─────────────────────────────────────────────────────────────
   eventList: () =>
