@@ -47,17 +47,23 @@ _EVENT_NAMESPACE = UUID("6f3a1c22-9b4e-4f4a-9a1f-2c7f6d0a1e55")
 #: metres per degree of latitude. Longitude is scaled by cos(lat) at use.
 _M_PER_DEG_LAT = 110_574.0
 
-#: Severity for the three safety classes, which carry none on the Observation.
+#: Severity for the four safety classes, which carry none on the Observation.
 #:
 #: This is an explicit, reviewable policy — NOT a fallback. The distinction
 #: matters: a blanket default would render a hit-and-run as a small blue dot
 #: next to a hairline crack, which is exactly backwards. Infrastructure classes
 #: never reach this table because the Observation validator already guarantees
 #: they carry an IRC:82-2015 severity.
+#:
+#: NEAR_MISS is usually set explicitly on the Observation (M4 derives it from
+#: min_ttc_seconds — see services/perception/incidents/near_miss.py) so this
+#: entry is the fallback for the rare cluster where none of the observations
+#: carried one.
 _SAFETY_SEVERITY: dict[DetectionClass, Severity] = {
     DetectionClass.COLLISION: Severity.LARGE,
     DetectionClass.RASH_DRIVING: Severity.MEDIUM,
     DetectionClass.PEDESTRIAN_RISK: Severity.MEDIUM,
+    DetectionClass.NEAR_MISS: Severity.MEDIUM,
 }
 
 

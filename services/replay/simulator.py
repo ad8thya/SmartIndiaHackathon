@@ -38,6 +38,7 @@ from contracts import (
 
 from services.perception.defects import get_defect_detector
 from services.perception.incidents import get_incident_detector
+from services.perception.incidents.near_miss import MockNearMissDetector
 from services.perception.pedestrian import get_pedestrian_detector
 
 from .clock import VirtualClock
@@ -151,6 +152,10 @@ class Simulator:
         self.defects = get_defect_detector()
         self.pedestrian = get_pedestrian_detector()
         self.incidents = get_incident_detector()
+        # near-miss has no USE_REAL_* flag yet — it is scaffolding for the AI
+        # intelligence layer, not one of the six frozen Protocols, so there is
+        # no factory to swap. See services/perception/incidents/near_miss.py.
+        self.near_miss = MockNearMissDetector()
 
         self.published = 0
         self.observations_emitted = 0
@@ -196,6 +201,7 @@ class Simulator:
         reset = getattr(self.incidents, "reset", None)
         if callable(reset):
             reset()
+        self.near_miss.reset()
 
     def _publish_position(
         self,
@@ -234,6 +240,10 @@ class Simulator:
         for report in self._safely(self.incidents.process, [], meta, "incidents"):
             self._emit(incident_topic(bus.bus_id), report)
             self.incidents_emitted += 1
+
+        for observation in self._safely(self.near_miss.detect, None, meta, "near_miss"):
+            self._emit(observation_topic(bus.bus_id), observation)
+            self.observations_emitted += 1
 
     def _safely(
         self, fn: Any, frames: Any, meta: FrameMeta, label: str

@@ -20,6 +20,7 @@ from .mock import (
     SCRIPTED_SEGMENT,
     MockIncidentDetector,
 )
+from .near_miss import MockNearMissDetector, scripted_near_misses
 
 __all__ = [
     "SCRIPTED_BUS",
@@ -28,9 +29,11 @@ __all__ = [
     "SCRIPTED_SEGMENT",
     "IncidentSettings",
     "MockIncidentDetector",
+    "MockNearMissDetector",
     "RealIncidentDetector",
     "get_incident_detector",
     "get_settings",
     "hash_plate",
     "reset_incident_detector",
+    "scripted_near_misses",
 ]

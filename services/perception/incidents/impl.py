@@ -22,6 +22,38 @@ TODO (M4):
      See config.hash_plate — use it, do not roll your own.
   6. Write a narrative a human can read. The dossier is evidence; "COLLISION
      0.87" is not evidence.
+
+TODO (M4) — NEAR-MISS, the project's most novel feature. Read this twice
+before touching near_miss.py's real implementation; it is easy to misbuild by
+reaching for a new model when none is needed.
+
+  THIS REQUIRES ZERO NEW MODELS. Everything it needs already exists once the
+  vehicle tracker above and M3's pedestrian tracker are both running:
+
+  1. Reuse the EXISTING ByteTrack output from both trackers — do NOT train a
+     dedicated near-miss detector. A near-miss is a *geometric relationship*
+     between two tracks that already exist, not a new visual class to learn.
+  2. Ground-plane homography: project each track's image-plane bounding-box
+     centre onto the road plane using the same camera calibration M1 derives
+     for `severity_from_dimensions`'s bbox-to-mm conversion — do not derive a
+     second calibration.
+  3. Time-to-collision from relative position and closing velocity: for a
+     vehicle track and a pedestrian track both present in the same window,
+     project both trajectories forward on the ground plane and compute the
+     time at which their separation would reach zero, using the closing
+     velocity between them (not either track's raw speed alone).
+  4. Flag a candidate when TTC < 1.5s AND the pedestrian's projected position
+     falls inside the vehicle's projected path (not just "nearby" — a
+     pedestrian on the far pavement with a low TTC because they are jogging
+     alongside the bus is not a near-miss).
+  5. Severity from TTC, not from IRC:82-2015 (that table is for surface
+     distress dimensions and does not apply here):
+       TTC < 0.5s  -> LARGE
+       TTC < 1.0s  -> MEDIUM
+       otherwise   -> SMALL
+  6. Emit as an Observation with `detection_class=DetectionClass.NEAR_MISS`
+     and the derived `severity`, exactly like `near_miss.py`'s mock does —
+     the fusion path does not change between mock and real.
 """
 
 from __future__ import annotations

@@ -112,6 +112,30 @@ def test_incidents_appear_over_time(publisher: RecordingPublisher) -> None:
         IncidentReport.model_validate(payload)
 
 
+def test_near_misses_appear_as_observations(publisher: RecordingPublisher) -> None:
+    """Near-miss events flow through the normal fusion path as
+    DetectionClass.NEAR_MISS — see contracts.FUSABLE_CLASSES."""
+    settings = ReplaySettings(REPLAY_SPEED=600.0, REPLAY_LOOP=True)
+    simulator = Simulator(publisher, settings=settings)
+    for _ in range(200):
+        simulator.tick(1.0)
+    near_misses = [
+        payload
+        for payload in publisher.topics("/observation")
+        if payload["detection_class"] == "NEAR_MISS"
+    ]
+    assert near_misses, "no scripted near-miss junction fired"
+    for payload in near_misses:
+        observation = Observation.model_validate(payload)
+        assert observation.severity is not None
+
+
+def test_near_miss_resets_at_the_terminus(simulator: Simulator) -> None:
+    simulator.near_miss._fired.add("ra-puram-crossing")
+    simulator._on_terminus()
+    assert simulator.near_miss._fired == set()
+
+
 def test_topics_are_namespaced_per_bus(simulator: Simulator, publisher: RecordingPublisher) -> None:
     """`bus/{id}/position` — the id in the topic must match the id in the body,
     or a subscriber filtering by topic gets somebody else's telemetry."""
