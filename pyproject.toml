@@ -65,6 +65,12 @@ ml = [
     "filterpy>=1.4.5",
     "pillow>=11.0",
     "scipy>=1.14",
+    # pandas/pyyaml/opencv already come in transitively via ultralytics + paddleocr;
+    # these two don't — tabulate backs DataFrame.to_markdown() (used throughout
+    # notebooks/), onnxruntime backs the onnx-CPU leg of notebooks/common/export.py's
+    # latency benchmark (silently skipped, not an error, if this were ever absent).
+    "tabulate>=0.9",
+    "onnxruntime>=1.19",
 ]
 # pip install -e ".[geo]"  → M2 (traffic + what-if)
 geo = [

@@ -32,5 +32,20 @@ data/*.pkl
 *.db
 *.sqlite3
 
+# ML training datasets (notebooks/ — raw downloads + prepared YOLO layouts, GBs each)
+data/raw/
+data/rdd2022_india/
+data/hazards/
+data/hazards_prepared/
+data/plates/
+data/plates_prepared/
+
+# ML training run artefacts / notebook checkpoints / dataset archives
+runs/
+wandb/
+.ipynb_checkpoints/
+*.zip
+*.tar.gz
+
 # typescript incremental build info
 apps/*/tsconfig.tsbuildinfo
