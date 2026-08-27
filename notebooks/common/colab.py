@@ -62,7 +62,7 @@ def setup_environment(mount_drive: bool = True) -> Environment:
 
     if colab:
         if mount_drive:
-            from google.colab import drive  # type: ignore[import-not-found]
+            from google.colab import drive
 
             drive.mount("/content/drive")
 
