@@ -26,9 +26,9 @@ class ConversionReport:
     orphan_images: list[str] = field(default_factory=list)
     orphan_xml: list[str] = field(default_factory=list)
     dropped_boxes: int = 0
-    dropped_box_reasons: Counter = field(default_factory=Counter)
-    unknown_classes: Counter = field(default_factory=Counter)
-    class_counts: Counter = field(default_factory=Counter)
+    dropped_box_reasons: Counter[str] = field(default_factory=Counter)
+    unknown_classes: Counter[str] = field(default_factory=Counter)
+    class_counts: Counter[str] = field(default_factory=Counter)
 
     def print_summary(self) -> None:
         print(f"images found:            {self.images_total}")
@@ -64,7 +64,8 @@ def _voc_size(root: ET.Element, image_path: Path) -> tuple[int, int]:
     from PIL import Image
 
     with Image.open(image_path) as img:
-        return img.size
+        w, h = img.size
+        return int(w), int(h)
 
 
 def convert_voc_dir(
