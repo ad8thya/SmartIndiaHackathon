@@ -70,14 +70,17 @@ prepare notebook (01/03/05) and every train notebook (02/04/06) calls
 | 2 | D20 | ALLIGATOR_CRACK |
 | 3 | D40 | POTHOLE — the minority class the whole pitch is about |
 
-**`yolo_hazard.pt`** (self-annotated, 3 classes — WATERLOGGING dropped 2026-08-28,
-no verifiable-geography dataset with a second corroborating source)
+**`yolo_hazard.pt`** (self-annotated, 3 classes — DAMAGED_DIVIDER dropped
+2026-08-28, no dataset found with both a confirmed licence and a verifiably-
+labelled divider class. WATERLOGGING stayed in despite non-Indian source
+imagery — see the caveat in `notebooks/03_prepare_hazards.ipynb` Step 1 and
+`MODEL_CARD_hazard.md`.)
 
 | index | class |
 |---|---|
-| 0 | DAMAGED_DIVIDER |
-| 1 | FADED_ZEBRA |
-| 2 | DAMAGED_SIGN |
+| 0 | FADED_ZEBRA |
+| 1 | DAMAGED_SIGN |
+| 2 | WATERLOGGING |
 
 **`yolo_plate.pt`** (single class)
 
