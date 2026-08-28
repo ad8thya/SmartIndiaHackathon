@@ -36,11 +36,14 @@ RDD_TO_DETECTION_CLASS: dict[str, str] = {
 }
 
 #: yolo_hazard.pt — self-annotated hazard classes.
+#: WATERLOGGING was dropped (2026-08-28): the only sourceable dataset had
+#: unverifiable geography and no second corroborating source — three solid
+#: classes beat four with one shaky. DetectionClass.WATERLOGGING itself is
+#: untouched in contracts/enums.py; it simply has no producer right now.
 HAZARD_CLASSES: dict[int, str] = {
-    0: "WATERLOGGING",
-    1: "DAMAGED_DIVIDER",
-    2: "FADED_ZEBRA",
-    3: "DAMAGED_SIGN",
+    0: "DAMAGED_DIVIDER",
+    1: "FADED_ZEBRA",
+    2: "DAMAGED_SIGN",
 }
 
 #: index -> contracts.DetectionClass name, ready to drop straight into a
