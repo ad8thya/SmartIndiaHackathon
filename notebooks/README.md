@@ -77,7 +77,7 @@ prepare notebook (01/03/05) and every train notebook (02/04/06) calls
 | 0 | WATERLOGGING |
 | 1 | DAMAGED_DIVIDER |
 | 2 | FADED_ZEBRA |
-| 3 | MISSING_SIGN |
+| 3 | DAMAGED_SIGN |
 
 **`yolo_plate.pt`** (single class)
 
@@ -135,5 +135,5 @@ they found and where they looked so you can adjust the path by hand.
 **A class comes back empty / under the minimum**
 `03_prepare_hazards.ipynb` refuses to proceed with fewer than 50 images in
 any class (Step 6) — go back and source more for that class, or drop
-MISSING_SIGN first per the guidance in Step 1. Don't lower the minimum to get
+DAMAGED_SIGN first per the guidance in Step 1. Don't lower the minimum to get
 past the check; a per-class number below it isn't a reportable accuracy claim.

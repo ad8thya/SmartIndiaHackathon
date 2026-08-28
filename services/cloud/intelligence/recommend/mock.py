@@ -17,7 +17,7 @@ sees, so the two never disagree about what is happening on a road):
 
 `SIGNAGE` and `STREET_LIGHT` are reserved `RecommendationType` members with no
 mock trigger yet — the real implementation's richer rule set (impl.py) is
-expected to use them once it has evidence to key off (e.g. a MISSING_SIGN
+expected to use them once it has evidence to key off (e.g. a DAMAGED_SIGN
 defect, or incidents clustering after dark).
 
 Every recommendation carries `rationale` and `evidence_event_ids` — the mock

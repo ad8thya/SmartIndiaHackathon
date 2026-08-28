@@ -40,7 +40,7 @@ HAZARD_CLASSES: dict[int, str] = {
     0: "WATERLOGGING",
     1: "DAMAGED_DIVIDER",
     2: "FADED_ZEBRA",
-    3: "MISSING_SIGN",
+    3: "DAMAGED_SIGN",
 }
 
 #: index -> contracts.DetectionClass name, ready to drop straight into a

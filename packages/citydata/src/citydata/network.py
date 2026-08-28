@@ -364,10 +364,10 @@ DEFECT_HOTSPOTS: list[HotspotSpec] = [
         "HS-11",
         "SEG-570-003",
         (80.2680, 13.0780),
-        "MISSING_SIGN",
+        "DAMAGED_SIGN",
         "MEDIUM",
         0.75,
-        "Speed limit plate missing from the gantry.",
+        "Speed limit plate bent and unreadable on the gantry.",
     ),
     HotspotSpec(
         "HS-12",

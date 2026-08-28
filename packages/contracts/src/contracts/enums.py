@@ -39,7 +39,7 @@ class DetectionClass(StrEnum):
     ALLIGATOR_CRACK = "ALLIGATOR_CRACK"
     WATERLOGGING = "WATERLOGGING"
     DAMAGED_DIVIDER = "DAMAGED_DIVIDER"
-    MISSING_SIGN = "MISSING_SIGN"
+    DAMAGED_SIGN = "DAMAGED_SIGN"
     FADED_ZEBRA = "FADED_ZEBRA"
     # ── traffic (M2) ───────────────────────────────────────────────────────
     VEHICLE = "VEHICLE"
@@ -150,7 +150,7 @@ INFRASTRUCTURE_CLASSES: frozenset[DetectionClass] = frozenset(
         DetectionClass.ALLIGATOR_CRACK,
         DetectionClass.WATERLOGGING,
         DetectionClass.DAMAGED_DIVIDER,
-        DetectionClass.MISSING_SIGN,
+        DetectionClass.DAMAGED_SIGN,
         DetectionClass.FADED_ZEBRA,
     }
 )

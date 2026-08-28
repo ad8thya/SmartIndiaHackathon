@@ -39,7 +39,7 @@ _CLASS_MAP: dict[int, DetectionClass] = {
     3: DetectionClass.ALLIGATOR_CRACK,
     4: DetectionClass.WATERLOGGING,
     5: DetectionClass.DAMAGED_DIVIDER,
-    6: DetectionClass.MISSING_SIGN,
+    6: DetectionClass.DAMAGED_SIGN,
     7: DetectionClass.FADED_ZEBRA,
 }
 

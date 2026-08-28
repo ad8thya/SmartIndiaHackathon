@@ -198,7 +198,7 @@ def _build_events() -> list[Event]:
                     DetectionClass.WATERLOGGING,
                     DetectionClass.FADED_ZEBRA,
                     DetectionClass.DAMAGED_DIVIDER,
-                    DetectionClass.MISSING_SIGN,
+                    DetectionClass.DAMAGED_SIGN,
                 ]
             )
             severity = RNG.choices(
