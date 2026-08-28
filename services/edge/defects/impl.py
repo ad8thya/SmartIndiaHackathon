@@ -13,6 +13,18 @@ TODO (M1) — suggested order, roughly one item per day:
   3. Estimate real-world size from the bbox to get an IRC:82-2015 severity.
      A homography from four road-plane points is enough; see
      contracts.severity_from_dimensions once you have millimetres.
+     EXCEPTION — ZEBRA_CROSSING: its severity means marking CONDITION, not a
+     physical dimension (see notebooks/03_prepare_hazards.ipynb Step 1b for
+     the rubric), and there is no condition-scoring code yet — that is future
+     work (repeated-pass comparison or a crop heuristic), deliberately not
+     built this sprint. Observation._infrastructure_needs_severity requires
+     SOME severity for this class regardless, so until condition-scoring
+     exists, use an explicit fixed placeholder (e.g. always MEDIUM) — the
+     same "documented reviewable policy, not an invented per-observation
+     value" pattern _SAFETY_SEVERITY already uses in consensus/mock.py and
+     consensus/impl.py for the safety classes. Do NOT invent a value per
+     detection here; that reintroduces the F9 fabricated-severity bug this
+     project already fixed once, just for a different class.
   4. Save the crop and put its URI in evidence_uri.
   5. Suppress duplicates across consecutive frames (IoU + GPS delta) so one
      pothole does not become forty observations.
@@ -40,7 +52,7 @@ _CLASS_MAP: dict[int, DetectionClass] = {
     4: DetectionClass.WATERLOGGING,
     5: DetectionClass.DAMAGED_DIVIDER,
     6: DetectionClass.DAMAGED_SIGN,
-    7: DetectionClass.FADED_ZEBRA,
+    7: DetectionClass.ZEBRA_CROSSING,  # severity: see the TODO exception above
 }
 
 

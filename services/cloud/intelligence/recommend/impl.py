@@ -8,7 +8,7 @@ TODO (M2):
      ends up persisted as) — recommend SIGNAL_TIMING only when the SAME hour
      bucket is consistently congested, not just "congested on average".
   2. evidence_event_ids: query postgres for the actual Event ids that
-     triggered each rule (e.g. the FADED_ZEBRA events near this road, the
+     triggered each rule (e.g. the ZEBRA_CROSSING events near this road, the
      NEAR_MISS events forming the cluster) instead of the mock's fabricated
      uuid5 placeholders. A recommendation an operator can click through to its
      source events is worth far more than one that cannot be audited.

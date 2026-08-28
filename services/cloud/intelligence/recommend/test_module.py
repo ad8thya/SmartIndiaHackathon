@@ -65,7 +65,7 @@ def test_every_recommendation_has_rationale_and_evidence(engine: RecommendationE
     recs = engine.recommend(
         ROAD,
         ctx(
-            defect_counts={"FADED_ZEBRA": 2, "DAMAGED_DIVIDER": 1, "WATERLOGGING": 3},
+            defect_counts={"ZEBRA_CROSSING": 2, "DAMAGED_DIVIDER": 1, "WATERLOGGING": 3},
             school_zone_distance_m=50.0,
             pedestrian_density=8.0,
             avg_congestion_pct=80.0,
@@ -81,22 +81,22 @@ def test_every_recommendation_has_rationale_and_evidence(engine: RecommendationE
 
 # ── each rule fires on its trigger and not otherwise ────────────────────────
 def test_zebra_crossing_needs_all_three_conditions(engine: RecommendationEngine) -> None:
-    # faded zebra alone: no
+    # zebra crossing alone: no
     assert RecommendationType.ZEBRA_CROSSING not in types_of(
-        engine.recommend(ROAD, ctx(defect_counts={"FADED_ZEBRA": 1}))
+        engine.recommend(ROAD, ctx(defect_counts={"ZEBRA_CROSSING": 1}))
     )
-    # faded zebra + school, but low pedestrian density: no
+    # zebra crossing + school, but low pedestrian density: no
     assert RecommendationType.ZEBRA_CROSSING not in types_of(
         engine.recommend(
             ROAD,
-            ctx(defect_counts={"FADED_ZEBRA": 1}, school_zone_distance_m=50.0, pedestrian_density=1.0),
+            ctx(defect_counts={"ZEBRA_CROSSING": 1}, school_zone_distance_m=50.0, pedestrian_density=1.0),
         )
     )
     # all three: yes, and HIGH priority
     recs = engine.recommend(
         ROAD,
         ctx(
-            defect_counts={"FADED_ZEBRA": 1},
+            defect_counts={"ZEBRA_CROSSING": 1},
             school_zone_distance_m=50.0,
             pedestrian_density=8.0,
         ),

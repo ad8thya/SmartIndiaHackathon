@@ -3,7 +3,7 @@
 Five triggers, each keyed off `RiskContext` (the same evidence `RiskScorer`
 sees, so the two never disagree about what is happening on a road):
 
-    faded zebra + school within 150m + elevated pedestrian density
+    zebra crossing + school within 150m + elevated pedestrian density
         -> ZEBRA_CROSSING, priority HIGH
     recurring congestion (approximated here as sustained average congestion —
     RiskContext does not carry hour-of-day granularity)
@@ -94,13 +94,13 @@ class MockRecommendationEngine:
     def _zebra_crossing(
         self, road_id: str, ctx: RiskContext, lat: float, lon: float, now: datetime
     ) -> InfrastructureRecommendation | None:
-        faded = ctx.defect_counts.get(str(DetectionClass.FADED_ZEBRA), 0)
+        crossings = ctx.defect_counts.get(str(DetectionClass.ZEBRA_CROSSING), 0)
         near_school = (
             ctx.school_zone_distance_m is not None
             and ctx.school_zone_distance_m <= self.settings.RECOMMEND_SCHOOL_RADIUS_M
         )
         elevated_peds = ctx.pedestrian_density >= self.settings.RECOMMEND_PEDESTRIAN_THRESHOLD
-        if not (faded > 0 and near_school and elevated_peds):
+        if not (crossings > 0 and near_school and elevated_peds):
             return None
 
         return InfrastructureRecommendation(
@@ -110,13 +110,13 @@ class MockRecommendationEngine:
             rec_type=RecommendationType.ZEBRA_CROSSING,
             priority=RiskBand.HIGH,
             rationale=[
-                f"{faded} faded/missing zebra crossing report(s) on this road",
+                f"{crossings} zebra crossing report(s) on this road",
                 f"school zone {ctx.school_zone_distance_m:.0f}m away "
                 f"(within {self.settings.RECOMMEND_SCHOOL_RADIUS_M:.0f}m)",
                 f"{ctx.pedestrian_density:.0f} pedestrian sighting(s) nearby "
                 f"(≥ {self.settings.RECOMMEND_PEDESTRIAN_THRESHOLD:.0f})",
             ],
-            evidence_event_ids=_evidence_ids(road_id, RecommendationType.ZEBRA_CROSSING, faded),
+            evidence_event_ids=_evidence_ids(road_id, RecommendationType.ZEBRA_CROSSING, crossings),
             estimated_beneficiaries=int(ctx.pedestrian_density * 20),
             detected_at=now,
         )

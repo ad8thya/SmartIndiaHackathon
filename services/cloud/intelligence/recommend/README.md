@@ -22,7 +22,7 @@ Invariants:
 
 | trigger | recommendation | priority |
 |---|---|---|
-| faded zebra + school ≤150m + elevated pedestrian density | `ZEBRA_CROSSING` | HIGH |
+| zebra crossing + school ≤150m + elevated pedestrian density | `ZEBRA_CROSSING` | HIGH |
 | sustained average congestion ≥55% | `SIGNAL_TIMING` | MODERATE/HIGH |
 | damaged divider present | `DIVIDER` | HIGH |
 | repeated waterlogging (≥2 reports) | `DRAINAGE` | MODERATE/HIGH |
@@ -43,7 +43,7 @@ from contracts import RiskContext
 from services.cloud.intelligence.recommend import get_recommendation_engine
 
 ctx = RiskContext(
-    defect_counts={'FADED_ZEBRA': 1}, avg_congestion_pct=0.0, pedestrian_density=8.0,
+    defect_counts={'ZEBRA_CROSSING': 1}, avg_congestion_pct=0.0, pedestrian_density=8.0,
     near_miss_count=0, school_zone_distance_m=50.0, pci_score=100.0, recent_incident_count=0,
 )
 for rec in get_recommendation_engine().recommend('SEG-42A-002', ctx):

@@ -292,7 +292,7 @@ DEFECT_HOTSPOTS: list[HotspotSpec] = [
         "HS-03",
         "SEG-27B-002",
         (80.2480, 13.0580),
-        "FADED_ZEBRA",
+        "ZEBRA_CROSSING",
         "SMALL",
         0.72,
         "Crossing markings worn to under 30% coverage.",

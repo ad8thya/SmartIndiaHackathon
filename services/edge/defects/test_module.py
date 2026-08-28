@@ -127,3 +127,31 @@ def test_repeated_passes_never_reuse_an_observation_id(detector: DefectDetector)
         ):
             assert str(obs.obs_id) not in seen
             seen.add(str(obs.obs_id))
+
+
+# ── mock-specific: ZEBRA_CROSSING severity placeholder regression guard ─────
+# NOT a Protocol invariant — a real implementation may one day compute a
+# genuine condition score, and this test would rightly need to change then.
+# Its job is narrower: guard the MOCK against silently resuming random or
+# drifted severity for this class (see ZEBRA_CROSSING_PLACEHOLDER_SEVERITY
+# in mock.py). If this starts failing, someone wired ZEBRA_CROSSING back into
+# _NOVEL_CLASSES or the drift path — that is the fabrication bug, back again.
+def test_zebra_crossing_severity_is_always_the_placeholder() -> None:
+    from services.edge.defects.mock import ZEBRA_CROSSING_PLACEHOLDER_SEVERITY
+
+    mock = MockDefectDetector()
+    seen_zebra_crossing = False
+    for hotspot in DEFECT_HOTSPOTS:
+        for frame_idx in range(50):
+            observations = mock.detect(
+                None, meta_at(hotspot.center[1], hotspot.center[0], frame_idx=frame_idx)
+            )
+            for obs in observations:
+                if obs.detection_class == DetectionClass.ZEBRA_CROSSING:
+                    seen_zebra_crossing = True
+                    assert obs.severity == ZEBRA_CROSSING_PLACEHOLDER_SEVERITY
+
+    assert seen_zebra_crossing, (
+        "no ZEBRA_CROSSING observation fired across all hotspots — "
+        "this test isn't exercising the path it's meant to guard"
+    )
