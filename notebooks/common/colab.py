@@ -109,9 +109,11 @@ def gpu_report() -> dict[str, object]:
     """Prints and returns a torch/CUDA summary. Call after installing deps."""
     import torch
 
+    mps_available = torch.backends.mps.is_available()
     info: dict[str, object] = {
         "torch_version": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
+        "mps_available": mps_available,
     }
     print(f"torch {torch.__version__}")
     if torch.cuda.is_available():
@@ -120,6 +122,12 @@ def gpu_report() -> dict[str, object]:
         info["gpu_name"] = name
         info["vram_gb"] = round(vram_gb, 1)
         print(f"CUDA available — {name}, {vram_gb:.1f} GB VRAM")
+    elif mps_available:
+        info["gpu_name"] = "Apple Silicon (MPS)"
+        print("NO CUDA GPU on this runtime, but MPS (Apple Silicon) is available.")
+        print("Pass device='mps' to ultralytics for local inference (e.g. Phase 4 plate/")
+        print("hazard smoke tests) — it is meaningfully faster than CPU for that.")
+        print("MPS does not replace Colab for training — keep 01/02/04/06 on a T4 runtime.")
     else:
         print("NO GPU DETECTED.")
         print("Training on CPU works but is roughly 10-20x slower than a T4.")
