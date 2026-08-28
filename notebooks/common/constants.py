@@ -36,11 +36,23 @@ RDD_TO_DETECTION_CLASS: dict[str, str] = {
 }
 
 #: yolo_hazard.pt — self-annotated hazard classes.
+#: DAMAGED_DIVIDER was dropped (2026-08-28): the only Indian-specific lead
+#: (DATS_2022, Mendeley, CC BY 4.0) could not be verified — its file API is
+#: inaccessible without a browser session, and the source paper's full text
+#: mentions "divider" exactly once, as background-scene prose, never as an
+#: entry in its class table. No other candidate (Roboflow guardrail sets)
+#: had a confirmable licence. WATERLOGGING stayed IN despite mixed/unverified
+#: source-image geography (see notebook 03 Step 1 and MODEL_CARD_hazard.md)
+#: — an honestly-caveated class beats not having it.
+#: FADED_ZEBRA renamed to ZEBRA_CROSSING (2026-08-28): the model detects the
+#: crossing, which is unambiguous and where the annotation data actually is.
+#: Its severity means CONDITION (how worn the markings are, per the rubric in
+#: notebook 03 Step 1), not defect size like every other class here — see
+#: contracts.enums.DetectionClass's docstring for the same caveat.
 HAZARD_CLASSES: dict[int, str] = {
-    0: "WATERLOGGING",
-    1: "DAMAGED_DIVIDER",
-    2: "FADED_ZEBRA",
-    3: "MISSING_SIGN",
+    0: "ZEBRA_CROSSING",
+    1: "DAMAGED_SIGN",
+    2: "WATERLOGGING",
 }
 
 #: index -> contracts.DetectionClass name, ready to drop straight into a

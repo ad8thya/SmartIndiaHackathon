@@ -28,8 +28,15 @@ __all__ = [
 class DetectionClass(StrEnum):
     """Everything a bus-mounted camera can report.
 
-    The first eight are *infrastructure* classes (M1) and always carry an
-    IRC:82-2015 severity. The rest are traffic/safety classes (M2/M3/M4).
+    The first eight are *infrastructure* classes (M1) and always carry a
+    severity. For every class except ZEBRA_CROSSING that severity is an
+    IRC:82-2015 dimensional measurement (see Severity below). For
+    ZEBRA_CROSSING, severity instead means the CONDITION of the crossing —
+    how faded/worn its markings are, not the size of a defect. "SMALL
+    severity zebra crossing" reads as a small defect; it means "markings
+    clearly visible, minor wear." See notebooks/03_prepare_hazards.ipynb for
+    the annotation rubric this maps to. The rest are traffic/safety classes
+    (M2/M3/M4).
     """
 
     # ── infrastructure defects (M1) ────────────────────────────────────────
@@ -39,8 +46,10 @@ class DetectionClass(StrEnum):
     ALLIGATOR_CRACK = "ALLIGATOR_CRACK"
     WATERLOGGING = "WATERLOGGING"
     DAMAGED_DIVIDER = "DAMAGED_DIVIDER"
-    MISSING_SIGN = "MISSING_SIGN"
-    FADED_ZEBRA = "FADED_ZEBRA"
+    DAMAGED_SIGN = "DAMAGED_SIGN"
+    #: severity here means CONDITION (how worn the markings are), not defect
+    #: size — see the class docstring above and the notebook 03 rubric.
+    ZEBRA_CROSSING = "ZEBRA_CROSSING"
     # ── traffic (M2) ───────────────────────────────────────────────────────
     VEHICLE = "VEHICLE"
     # ── pedestrian safety (M3) ─────────────────────────────────────────────
@@ -62,6 +71,11 @@ class Severity(StrEnum):
     SMALL   < 100 mm across / < 25 mm deep
     MEDIUM  100–300 mm across / 25–50 mm deep
     LARGE   > 300 mm across / > 50 mm deep
+
+    Exception: for DetectionClass.ZEBRA_CROSSING these three values instead
+    grade marking CONDITION per the rubric in notebooks/03_prepare_hazards.ipynb
+    (SMALL = clearly visible/minor wear ... LARGE = barely visible), not a
+    physical dimension — there is nothing to measure in mm on a crossing.
     """
 
     SMALL = "SMALL"
@@ -150,8 +164,8 @@ INFRASTRUCTURE_CLASSES: frozenset[DetectionClass] = frozenset(
         DetectionClass.ALLIGATOR_CRACK,
         DetectionClass.WATERLOGGING,
         DetectionClass.DAMAGED_DIVIDER,
-        DetectionClass.MISSING_SIGN,
-        DetectionClass.FADED_ZEBRA,
+        DetectionClass.DAMAGED_SIGN,
+        DetectionClass.ZEBRA_CROSSING,
     }
 )
 

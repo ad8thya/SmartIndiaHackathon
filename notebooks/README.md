@@ -27,7 +27,7 @@ none of it is meant to be committed.
 **Member B's chain:** 00 → 03 → 04, and independently 05 → 06 → (wait for A) → 07
 
 Member B should start **03** immediately — it is the slowest task on the
-whole ML track (sourcing + hand-annotating ~400 images) and doesn't touch a
+whole ML track (sourcing + hand-annotating ~300 images) and doesn't touch a
 GPU while waiting on people, so it should not be sequenced behind anything.
 
 ## Shared code — `notebooks/common/`
@@ -70,14 +70,19 @@ prepare notebook (01/03/05) and every train notebook (02/04/06) calls
 | 2 | D20 | ALLIGATOR_CRACK |
 | 3 | D40 | POTHOLE — the minority class the whole pitch is about |
 
-**`yolo_hazard.pt`** (self-annotated, 4 classes)
+**`yolo_hazard.pt`** (self-annotated, 3 classes — DAMAGED_DIVIDER dropped
+2026-08-28, no dataset found with both a confirmed licence and a verifiably-
+labelled divider class. WATERLOGGING stayed in despite mixed/unverified
+source-image geography — see the caveat in `notebooks/03_prepare_hazards.ipynb`
+Step 1 and `MODEL_CARD_hazard.md`. FADED_ZEBRA renamed to ZEBRA_CROSSING —
+severity now grades marking CONDITION, not defect size; see the rubric in
+notebook 03 Step 1.)
 
 | index | class |
 |---|---|
-| 0 | WATERLOGGING |
-| 1 | DAMAGED_DIVIDER |
-| 2 | FADED_ZEBRA |
-| 3 | MISSING_SIGN |
+| 0 | ZEBRA_CROSSING |
+| 1 | DAMAGED_SIGN |
+| 2 | WATERLOGGING |
 
 **`yolo_plate.pt`** (single class)
 
@@ -135,5 +140,5 @@ they found and where they looked so you can adjust the path by hand.
 **A class comes back empty / under the minimum**
 `03_prepare_hazards.ipynb` refuses to proceed with fewer than 50 images in
 any class (Step 6) — go back and source more for that class, or drop
-MISSING_SIGN first per the guidance in Step 1. Don't lower the minimum to get
+DAMAGED_SIGN first per the guidance in Step 1. Don't lower the minimum to get
 past the check; a per-class number below it isn't a reportable accuracy claim.

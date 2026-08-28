@@ -94,17 +94,17 @@ def test_distant_observations_stay_separate(fuser: EventFuser) -> None:
 
 
 def test_different_classes_never_fuse(fuser: EventFuser) -> None:
-    """A pothole and a faded zebra crossing at the same spot are two problems."""
+    """A pothole and a zebra crossing at the same spot are two problems."""
     events = fuser.fuse(
         [
             obs(detection_class=DetectionClass.POTHOLE),
-            obs(detection_class=DetectionClass.FADED_ZEBRA, severity=Severity.SMALL),
+            obs(detection_class=DetectionClass.ZEBRA_CROSSING, severity=Severity.SMALL),
         ]
     )
     assert len(events) == 2
     assert {event.detection_class for event in events} == {
         DetectionClass.POTHOLE,
-        DetectionClass.FADED_ZEBRA,
+        DetectionClass.ZEBRA_CROSSING,
     }
 
 

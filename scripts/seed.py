@@ -196,9 +196,9 @@ def _build_events() -> list[Event]:
                     DetectionClass.LONGITUDINAL_CRACK,
                     DetectionClass.TRANSVERSE_CRACK,
                     DetectionClass.WATERLOGGING,
-                    DetectionClass.FADED_ZEBRA,
+                    DetectionClass.ZEBRA_CROSSING,
                     DetectionClass.DAMAGED_DIVIDER,
-                    DetectionClass.MISSING_SIGN,
+                    DetectionClass.DAMAGED_SIGN,
                 ]
             )
             severity = RNG.choices(

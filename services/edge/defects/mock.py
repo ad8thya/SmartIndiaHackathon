@@ -8,6 +8,8 @@ The demo runs on this for the first four days, so it is written to be
   * confidence jitters around a per-hotspot baseline, so the fused confidence
     climbs the way it would with a real detector
   * severity follows the hotspot's IRC class, with occasional one-step drift
+    — except ZEBRA_CROSSING, which is a fixed placeholder, never drifted or
+    rolled (see ZEBRA_CROSSING_PLACEHOLDER_SEVERITY: it isn't measured)
   * a small fraction of frames produce an unscripted new defect, so the map
     keeps growing during a long demo
 
@@ -32,15 +34,23 @@ from contracts import (
 
 from .config import DefectSettings, get_settings
 
-#: classes the "novel defect" path is allowed to invent
+#: classes the "novel defect" path is allowed to invent. ZEBRA_CROSSING is
+#: deliberately absent — see ZEBRA_CROSSING_PLACEHOLDER_SEVERITY below; it
+#: never gets a rolled severity, scripted or novel.
 _NOVEL_CLASSES = (
     DetectionClass.POTHOLE,
     DetectionClass.LONGITUDINAL_CRACK,
     DetectionClass.TRANSVERSE_CRACK,
-    DetectionClass.FADED_ZEBRA,
 )
 
 _SEVERITY_LADDER = (Severity.SMALL, Severity.MEDIUM, Severity.LARGE)
+
+#: PLACEHOLDER. ZEBRA_CROSSING severity is NOT measured and has no planned
+#: mechanism to measure it. Unlike POTHOLE etc., where mock severity stands in
+#: for severity_from_dimensions (real, M1 will build it), condition scoring for
+#: crossings does not exist and is not scheduled. Any downstream consumer
+#: treating this as measured is wrong.
+ZEBRA_CROSSING_PLACEHOLDER_SEVERITY = Severity.MEDIUM
 
 
 class MockDefectDetector:
@@ -96,7 +106,12 @@ class MockDefectDetector:
         confidence += rng.uniform(-0.05, 0.05)
         confidence = min(max(confidence, 0.30), 0.98)
 
-        severity = self._drifted_severity(hotspot.severity, rng)
+        # ZEBRA_CROSSING: no dice — placeholder severity, not drifted. See
+        # ZEBRA_CROSSING_PLACEHOLDER_SEVERITY: it is not measured.
+        if hotspot.detection_class == DetectionClass.ZEBRA_CROSSING:
+            severity = ZEBRA_CROSSING_PLACEHOLDER_SEVERITY
+        else:
+            severity = self._drifted_severity(hotspot.severity, rng)
 
         return Observation(
             obs_id=uuid4(),
@@ -124,6 +139,8 @@ class MockDefectDetector:
         )
 
     def _novel_observation(self, meta: FrameMeta, rng: random.Random) -> Observation:
+        # ZEBRA_CROSSING is not in _NOVEL_CLASSES — no dice for it, ever. See
+        # ZEBRA_CROSSING_PLACEHOLDER_SEVERITY: it is not measured.
         detection_class = rng.choice(_NOVEL_CLASSES)
         severity = rng.choices(_SEVERITY_LADDER, weights=(6, 3, 1))[0]
         return Observation(
