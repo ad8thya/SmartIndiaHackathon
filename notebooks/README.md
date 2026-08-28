@@ -72,13 +72,15 @@ prepare notebook (01/03/05) and every train notebook (02/04/06) calls
 
 **`yolo_hazard.pt`** (self-annotated, 3 classes — DAMAGED_DIVIDER dropped
 2026-08-28, no dataset found with both a confirmed licence and a verifiably-
-labelled divider class. WATERLOGGING stayed in despite non-Indian source
-imagery — see the caveat in `notebooks/03_prepare_hazards.ipynb` Step 1 and
-`MODEL_CARD_hazard.md`.)
+labelled divider class. WATERLOGGING stayed in despite mixed/unverified
+source-image geography — see the caveat in `notebooks/03_prepare_hazards.ipynb`
+Step 1 and `MODEL_CARD_hazard.md`. FADED_ZEBRA renamed to ZEBRA_CROSSING —
+severity now grades marking CONDITION, not defect size; see the rubric in
+notebook 03 Step 1.)
 
 | index | class |
 |---|---|
-| 0 | FADED_ZEBRA |
+| 0 | ZEBRA_CROSSING |
 | 1 | DAMAGED_SIGN |
 | 2 | WATERLOGGING |
 

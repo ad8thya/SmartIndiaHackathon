@@ -196,7 +196,7 @@ def _build_events() -> list[Event]:
                     DetectionClass.LONGITUDINAL_CRACK,
                     DetectionClass.TRANSVERSE_CRACK,
                     DetectionClass.WATERLOGGING,
-                    DetectionClass.FADED_ZEBRA,
+                    DetectionClass.ZEBRA_CROSSING,
                     DetectionClass.DAMAGED_DIVIDER,
                     DetectionClass.DAMAGED_SIGN,
                 ]
