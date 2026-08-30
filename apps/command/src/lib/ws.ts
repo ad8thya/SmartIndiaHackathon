@@ -9,8 +9,12 @@
 
 import type { WSMessage, WSMessageType } from './types';
 
+const WS_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
 export const WS_URL: string =
-  (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:8000/ws/live';
+  (import.meta.env.VITE_WS_URL as string | undefined) ??
+  `${wsProtocol}//${window.location.hostname}:${WS_PORT}/ws/live`;
 
 export type WSHandler = (message: WSMessage) => void;
 export type ConnectionState = 'connecting' | 'open' | 'closed';

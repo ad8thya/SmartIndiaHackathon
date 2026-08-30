@@ -37,9 +37,11 @@ export interface FieldEvent {
   evidence_uris: string[];
 }
 
+const API_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
+
 const BASE: string =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
-  `${window.location.protocol}//${window.location.hostname}:8000`;
+  `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {

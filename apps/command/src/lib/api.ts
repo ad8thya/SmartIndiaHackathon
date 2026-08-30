@@ -26,8 +26,11 @@ import type {
   WorkflowStatus,
 } from './types';
 
+const API_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
+
 export const API_BASE: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000';
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+  `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
 
 export class ApiError extends Error {
   constructor(
