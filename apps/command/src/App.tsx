@@ -30,14 +30,18 @@ export default function App() {
   const bootstrap = useStore((s) => s.bootstrap);
   const connect = useStore((s) => s.connect);
   const disconnect = useStore((s) => s.disconnect);
+  const initRole = useStore((s) => s.initRole);
   const loading = useStore((s) => s.loading);
   const lastError = useStore((s) => s.lastError);
 
   useEffect(() => {
+    // read once on mount, not a live route — switching roles is a full
+    // reload by design (see BUILD.md), so this never needs to re-run
+    initRole(new URLSearchParams(window.location.search).get('role'));
     void bootstrap();
     connect();
     return () => disconnect();
-  }, [bootstrap, connect, disconnect]);
+  }, [bootstrap, connect, disconnect, initRole]);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-ink-900 text-slate-200">

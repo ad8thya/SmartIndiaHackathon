@@ -13,9 +13,18 @@ import {
   Route as RouteIcon,
   Smartphone,
   Timer,
+  Users,
+  X,
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { getScope } from '../lib/roleScope';
 import { compact } from '../lib/format';
+
+/** Same convention as PhoneFrame's FIELD_APP_URL: dynamic hostname so this
+ * still works from a phone/projector on the LAN, not just localhost. */
+const ALL_ROLES_URL: string =
+  (import.meta.env.VITE_ROLES_APP_URL as string | undefined) ??
+  `${window.location.protocol}//${window.location.hostname}:5175`;
 
 function Kpi({
   icon,
@@ -56,6 +65,10 @@ export function TopBar() {
   const refreshSummary = useStore((s) => s.refreshSummary);
   const refreshRoads = useStore((s) => s.refreshRoads);
   const refreshIntelligence = useStore((s) => s.refreshIntelligence);
+  const role = useStore((s) => s.role);
+  const scopeOverridden = useStore((s) => s.scopeOverridden);
+  const overrideScope = useStore((s) => s.overrideScope);
+  const scope = scopeOverridden ? null : getScope(role);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -85,6 +98,33 @@ export function TopBar() {
             Chennai · Command Centre
           </div>
         </div>
+      </div>
+
+      {/* the two role affordances, together: what you're scoped to (if
+          anything) and the escape hatch back to picking a different one —
+          this is what makes "picker → role → back → different role" a
+          rehearsable demo beat instead of a browser-back gamble */}
+      <div className="flex items-center gap-1.5 border-l border-white/5 pl-3">
+        {scope && (
+          <span className="flex items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-500/10 px-2.5 py-1 text-[10px] text-sky-200">
+            Scoped to {scope.label}
+            <button
+              type="button"
+              onClick={overrideScope}
+              title="This is a demo view, not access control — clear it any time"
+              className="text-sky-300 hover:text-sky-100"
+            >
+              <X size={10} />
+            </button>
+          </span>
+        )}
+        <a
+          href={ALL_ROLES_URL}
+          className="flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-slate-300 hover:border-white/20 hover:text-white"
+          title="Back to the role picker"
+        >
+          <Users size={11} /> All roles
+        </a>
       </div>
 
       <div className="flex flex-1 items-center overflow-x-auto">

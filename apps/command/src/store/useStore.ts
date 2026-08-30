@@ -9,6 +9,7 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import { LiveSocket, type ConnectionState } from '../lib/ws';
+import { getScope, resolveRole, type RoleId } from '../lib/roleScope';
 import type {
   AnalyticsSummary,
   BusPosition,
@@ -82,6 +83,13 @@ interface Store {
   lastError: string | null;
   loading: boolean;
 
+  // ── role scope (see lib/roleScope.ts) ──────────────────────────────────
+  /** null = no scope applied — either no/unrecognised ?role=, or the viewer
+   *  cleared it via overrideScope(). Every consumer must treat null as "show
+   *  everything", never as "show nothing". */
+  role: RoleId | null;
+  scopeOverridden: boolean;
+
   // ── actions ─────────────────────────────────────────────────────────────
   bootstrap: () => Promise<void>;
   connect: () => void;
@@ -103,6 +111,14 @@ interface Store {
   toggleBuildings: () => void;
   togglePhone: () => void;
   toggleRiskLayer: () => void;
+  /** Reads `role` from a `?role=` value, applies its scope's classes/panel
+   *  if one exists. Called once from App.tsx on mount — not a live route,
+   *  full reload is the intended way to switch roles (see BUILD.md). */
+  initRole: (raw: string | null) => void;
+  /** The constraint-#3 safety valve: un-restricts panels/KPIs/classes for
+   *  the rest of the session without touching `role` itself (so the badge
+   *  still shows who you're viewing as). */
+  overrideScope: () => void;
 
   // ── derived ─────────────────────────────────────────────────────────────
   visibleEvents: () => UTEvent[];
@@ -143,6 +159,9 @@ export const useStore = create<Store>((set, get) => ({
   connection: 'closed',
   lastError: null,
   loading: true,
+
+  role: null,
+  scopeOverridden: false,
 
   // ── bootstrap ───────────────────────────────────────────────────────────
   async bootstrap() {
@@ -330,6 +349,20 @@ export const useStore = create<Store>((set, get) => ({
   toggleBuildings: () => set({ showBuildings: !get().showBuildings }),
   togglePhone: () => set({ showPhone: !get().showPhone }),
   toggleRiskLayer: () => set({ showRiskLayer: !get().showRiskLayer }),
+
+  initRole: (raw) => {
+    const role = resolveRole(raw);
+    const scope = getScope(role);
+    set({
+      role,
+      // scope is null for a missing/unrecognised/not-command-eligible role —
+      // that must mean "no restriction", so filters/activePanel stay at
+      // their normal defaults rather than being narrowed to nothing.
+      ...(scope ? { filters: { ...EMPTY_FILTERS, classes: scope.classes ?? [] } } : {}),
+      ...(scope && scope.panels.length ? { activePanel: scope.panels[0] } : {}),
+    });
+  },
+  overrideScope: () => set({ scopeOverridden: true, filters: EMPTY_FILTERS }),
 
   // ── derived ─────────────────────────────────────────────────────────────
   eventList: () =>

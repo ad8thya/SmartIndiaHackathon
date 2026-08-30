@@ -11,6 +11,7 @@
 import { AlertTriangle, Activity, GitBranch, Sparkles, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ErrorBoundary } from './ErrorBoundary';
+import { getScope } from '../lib/roleScope';
 import type { PanelProps } from '../lib/types';
 
 import { DefectsPanel } from '../panels/DefectsPanel';
@@ -48,8 +49,18 @@ export function Sidebar() {
   const selectedRoadId = useStore((s) => s.selectedRoadId);
   const selectEvent = useStore((s) => s.selectEvent);
   const selectRoad = useStore((s) => s.selectRoad);
+  const role = useStore((s) => s.role);
+  const scopeOverridden = useStore((s) => s.scopeOverridden);
 
-  const tab = TABS.find((candidate) => candidate.id === activePanel) ?? TABS[0];
+  // null scope (no role, unrecognised role, or a role apps/roles keeps for
+  // itself) or an explicit override both mean "show every panel" — the same
+  // safe-default path, not two. The scope indicator + "Show everything" /
+  // "All roles" controls live in TopBar, next to each other — this just
+  // reads the same state to decide which panels are in the tab list.
+  const scope = scopeOverridden ? null : getScope(role);
+  const tabs = scope ? TABS.filter((candidate) => scope.panels.includes(candidate.id)) : TABS;
+
+  const tab = tabs.find((candidate) => candidate.id === activePanel) ?? tabs[0] ?? TABS[0];
   const { Component } = tab;
 
   const props: PanelProps = {
@@ -62,7 +73,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-[380px] shrink-0 flex-col border-l border-white/5 bg-ink-800">
       <nav className="flex shrink-0 border-b border-white/5" role="tablist">
-        {TABS.map((candidate) => {
+        {tabs.map((candidate) => {
           const active = candidate.id === tab.id;
           return (
             <button
