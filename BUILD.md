@@ -48,8 +48,8 @@ mock for real code is a one-line change inside one folder that no other file obs
 | **pedestrian** | M3 | **Working.** 3 seeded school zones; inside one, 1–3 sightings/frame and a 35 % base risk rate that climbs with speed over the 25 km/h zone limit; outside, ~6 % plain sightings and never a risk | **Stub** — `detect()` raises. 2 stubs | `services/edge/pedestrian/impl.py` |
 | **incidents** | M4 | **Working.** One scripted hit-and-run per replay loop: bus `MTC-VYASARPADI-3311`, segment `SEG-21G-002`, plate `TN 09 BX 4412`, OCR confidence `0.87`, 4 evidence frames. Plus ~1.2 %/frame rash-driving, ~35 % of which have unreadable plates | **Stub** — `process()` raises. 3 stubs | `services/edge/incidents/impl.py` |
 | **traffic** | M2 | **Working.** Twin-peaked congestion by hour-of-day, per-corridor phase shift, modulated by observed VEHICLE counts; PCI degrades from M1's defects; Greenshields speed. Clock comes from the newest observation, not wall time | **Stub** — `analyze()` raises. 2 stubs | `services/cloud/intelligence/traffic_analytics/impl.py` |
-| **whatif** | M2 | **Working, and derived rather than hardcoded.** Every one of the 26 segments gets its own delta, computed from segment length, routes sharing the corridor, lanes, free-flow speed and whether a parallel road exists. Deterministic (SHA-256 of the segment id, not `random`); no two roads return the same answer; the three rehearsed headline closures are pinned. **A heuristic, not graph routing** — the docstring says so | **Stub** — `simulate()` raises. 2 stubs | `services/cloud/intelligence/whatif/impl.py` |
-| **fusion** | M3 | **Working, and largely real.** Genuine noisy-OR confidence, genuine status ladder, stable event ids, confidence-weighted centroids, worst-severity-wins, SLA clocks, `FUSABLE_CLASSES` filtering. Only the *clustering* is faked: snap-to-25 m-grid instead of DBSCAN | **Stub** — `fuse()` raises. `_fusable()` helper is real and already correct | `services/cloud/consensus/impl.py` |
+| **whatif** | M2 | **Working, and derived rather than hardcoded.** Every one of the 26 segments gets its own delta, computed from segment length, routes sharing the corridor, lanes, free-flow speed and whether a parallel road exists. Deterministic (SHA-256 of the segment id, not `random`); no two roads return the same answer; the three rehearsed headline closures are pinned. **A heuristic, not graph routing** — the docstring says so | **BUILT, not demo-safe.** Real OSMnx + NetworkX over a 128k-node Chennai drive graph, cached to disk and never fetched at request time. Correct for 18/26 segments; 8 come back severed. `USE_REAL_WHATIF` stays `false` — see §11 | `services/cloud/intelligence/whatif/impl.py` |
+| **fusion** | M3 | **Working, and largely real.** Genuine noisy-OR confidence, genuine status ladder, stable event ids, confidence-weighted centroids, worst-severity-wins, SLA clocks, `FUSABLE_CLASSES` filtering. Only the *clustering* is faked: snap-to-25 m-grid instead of DBSCAN | **BUILT** — real `sklearn` DBSCAN (`metric="haversine"`, eps from the same settings the mock uses). Reuses the mock's confidence/status/severity code paths directly rather than copying them, and keeps event ids grid-keyed so pins survive across passes. `USE_REAL_FUSION` still `false` by default — see §11 | `services/cloud/consensus/impl.py` |
 | **risk** | M3 | **Working, and the intended v1.** A real, transparent 6-component weighted index (PCI 30% / congestion 20% / pedestrian density 15% / school proximity 15% / near-miss frequency 12% / recent incidents 8%). `components` always sum to `score`; `explanation` never empty | **Stub** — `score()` raises. Learned (gradient-boosted) upgrade path documented, same explainability requirement | `services/cloud/intelligence/urban_risk/impl.py` |
 | **recommend** | M2 | **Working.** Five deterministic proximity rules off the same `RiskContext` risk reads (ZEBRA_CROSSING, SIGNAL_TIMING, DIVIDER, DRAINAGE, SPEED_CALMING) | **Stub** — `recommend()` raises. Real evidence-id lookup from postgres documented | `services/cloud/intelligence/recommend/impl.py` |
 | **api** | M5 | n/a — real | **Real.** 19 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/cloud/api/**` |
@@ -480,3 +480,76 @@ risk-band layer at each road segment's centre.
 ---
 
 **Now read README.md § your member block, then run `make dev`.**
+
+
+---
+
+## 11. Real implementations — what was built, and what is safe to switch on
+
+Two of the eight `impl.py` stubs are now real code. **Both flags ship `false`**,
+and that is a deliberate, separate decision from whether the code works.
+
+### `consensus/impl.py` — DBSCAN fusion. Works; flag off pending a soak.
+
+Real `sklearn.cluster.DBSCAN`, `metric="haversine"` on radians with `eps`
+converted from metres, per detection class so a pothole never clusters with a
+pedestrian. DBSCAN noise (`-1`) becomes single-observation events rather than
+being discarded — one bus seeing a large pothole is still the first rung of the
+ladder.
+
+Everything downstream is the mock's own code, called directly: confidence,
+status, severity policy, the weighted centroid, SLA. So the flag changes *which
+observations group together* and nothing else.
+
+**Event ids stay stable** — the subtlety that would otherwise sink this. DBSCAN
+has no grid cell to hash, and hashing the cluster centroid mints a fresh uuid
+every time the centroid drifts, so the map re-creates every pin and no event
+ever accumulates a second bus. Identity is still the grid cell the centroid
+falls in; only membership comes from DBSCAN. That also means the same physical
+defect keeps the same `event_id` under either implementation.
+
+**It is not bug-for-bug identical with the mock, on purpose.** Three buses
+reporting one pothole within a couple of metres: the grid fuser splits them
+across a cell boundary into events of 2 and 1 buses, both `AI_VERIFIED`; DBSCAN
+sees one cluster of 3 and escalates it to `AUTHORITY_NOTIFIED`. That is the bug
+the swap exists to fix, and `test_dbscan_merges_what_the_grid_splits` asserts
+the *difference* rather than parity — a test asserting they agree would be
+asserting the bug. Seven tests cover the real fuser; they `importorskip`
+sklearn, so a core-only environment skips rather than fails.
+
+Why the flag is still off: it has not been run against a full replay loop for
+any length of time, and the demo is four days out. Flip it after a soak, not
+before.
+
+### `whatif/impl.py` — real graph routing. Works partially; flag off.
+
+Genuine shortest-path routing over the Chennai OSM drive network — 128,299
+nodes, 320,398 edges — weighted by travel time. `scripts/build_drive_graph.py`
+builds and pickles it once, offline (58 MB, gitignored); the engine loads that
+and **raises with the build command if it is missing** rather than reaching for
+Overpass mid-request.
+
+A seeded segment maps exactly onto the route leg between two anchors, so a
+closure removes that leg's own path edges — no proximity radius to tune. The
+edges touching the leg's endpoints are kept, because closing a road shuts the
+carriageway between two junctions while the junctions stay reachable from the
+cross streets.
+
+Measured against the real graph, 18 of 26 segments return **+0.7 to +10.1
+minutes**, which is the right shape. The other 8 come back at 33–41 minutes,
+which is the disconnection penalty: removing that leg leaves no path between
+its anchors at all. Closing one Chennai road does not usually sever a bus
+route, so those are almost certainly an anchor-snapping artefact — an anchor
+landing on a service road or the wrong side of a one-way pair.
+
+**So it stays off.** Putting "+41 min" beside eight roads on stage invites
+exactly the question we cannot answer. `mock.py`'s heuristic is derived,
+distinct per road, and honest about being a heuristic; that is what the demo
+runs. Picking this up starts with instrumenting `_prepare` to report which
+anchor pairs disconnect.
+
+### The other six stubs are untouched
+
+`defects`, `pedestrian`, `incidents`, `traffic`, `urban_risk` and `recommend`
+still raise `NotImplementedError`, as designed. `urban_risk`'s and
+`recommend`'s mocks are the intended v1, not placeholders — see §2.
