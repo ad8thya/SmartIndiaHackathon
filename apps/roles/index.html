@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover + the safe-area padding in index.css is what makes
+         this sit correctly under a real phone's notch when opened from a
+         phone browser, and it degrades to a normal responsive page on a
+         laptop screen — same bundle, no separate build. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#EFEFEC" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>URBAN TWIN</title>
+    <!-- the design uses the OS system font stack, not a web font — it's what
+         keeps first paint instant on a phone on mobile data -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
