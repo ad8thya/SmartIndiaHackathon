@@ -13,7 +13,7 @@ class ApiSettings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     API_BASE_URL: str = "http://localhost:8000"
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175"
+    CORS_ORIGINS: str = "http://localhost:5173"
     #: matches every vite dev port from a browser on localhost OR on the same
     #: private LAN (a phone on the office wifi hitting the laptop's 192.168.x.x
     #: address) — without this, "open it on your phone" only ever half-works:
@@ -25,6 +25,11 @@ class ApiSettings(BaseSettings):
         r"|192\.168\.\d{1,3}\.\d{1,3}):\d+$"
     )
     LOG_LEVEL: str = "INFO"
+
+    #: Where the built frontend lives, for the one-container deployment. Unset
+    #: (the default) means "look in the usual places, and if there is no build,
+    #: assume vite is serving the UI" — see services/cloud/api/spa.py.
+    WEB_DIST: str | None = None
 
     REDIS_URL: str = "redis://localhost:6379/0"
     MQTT_HOST: str = "localhost"

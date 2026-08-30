@@ -1,0 +1,20 @@
+# keep the build context small — without this, `docker build` ships the venv,
+# node_modules and every cache into the daemon before the first line runs
+.git
+.venv
+**/node_modules
+**/dist
+.mypy_cache
+.pytest_cache
+.ruff_cache
+**/__pycache__
+*.egg-info
+notebooks
+data/raw_video
+data/processed
+models
+*.pt
+*.pth
+*.onnx
+*.zip
+.env

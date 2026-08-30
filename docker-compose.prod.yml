@@ -1,0 +1,129 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  URBAN TWIN — production stack. One command, no dev servers.
+#
+#      docker compose -f docker-compose.prod.yml up --build
+#      → http://localhost:8000
+#
+#  Differences from docker-compose.yml (the dev one):
+#    · the api image also contains the built UI, so there is no vite anywhere
+#    · migrations and the seed run once, in their own short-lived services,
+#      before the api is allowed to start
+#    · the replay simulator runs as its own container, because you cannot
+#      bring six MTC buses to a hackathon
+#    · nothing but the api publishes a host port
+# ─────────────────────────────────────────────────────────────────────────────
+name: urban-twin-prod
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-urbantwin}:${POSTGRES_PASSWORD:-urbantwin}@postgres:5432/${POSTGRES_DB:-urbantwin}
+  REDIS_URL: redis://redis:6379/0
+  MQTT_HOST: mosquitto
+  MQTT_PORT: "1883"
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  PLATE_HASH_SALT: ${PLATE_HASH_SALT:-change-me-in-production}
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-urbantwin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-urbantwin}
+      POSTGRES_DB: ${POSTGRES_DB:-urbantwin}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-urbantwin} -d ${POSTGRES_DB:-urbantwin}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    # REQUIRED — mosquitto 2.x refuses every connection without it
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqttdata:/mosquitto/data
+
+  # ── one-shot: schema, then data ────────────────────────────────────────────
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    environment: *app-env
+    command: ["alembic", "-c", "packages/db/alembic.ini", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    environment: *app-env
+    command: ["python", "scripts/seed.py"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # ── the one container anyone talks to ──────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    environment: *app-env
+    ports:
+      - "${PORT:-8000}:8000"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 10
+
+  # ── the fleet ──────────────────────────────────────────────────────────────
+  replay:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    environment: *app-env
+    command:
+      - python
+      - -m
+      - services.tools.replay
+      - --speed
+      - "${REPLAY_SPEED:-60}"
+      - --buses
+      - "${REPLAY_BUSES:-6}"
+      - --loop
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  mqttdata:

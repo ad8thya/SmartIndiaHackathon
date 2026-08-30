@@ -26,6 +26,7 @@ from .fusion_loop import FusionLoop
 from .hub import Repeater, broadcaster, state
 from .mqtt_bridge import MqttBridge
 from .routers import ALL_ROUTERS
+from .spa import find_dist, mount_spa
 
 settings = get_api_settings()
 logging.basicConfig(
@@ -104,14 +105,24 @@ for router in ALL_ROUTERS:
     app.include_router(router)
 
 
-@app.get("/", include_in_schema=False)
-async def root() -> JSONResponse:
-    return JSONResponse(
-        {
-            "name": "URBAN TWIN API",
-            "contracts": contracts_version,
-            "docs": "/docs",
-            "health": "/health",
-            "websocket": "/ws/live",
-        }
-    )
+_web_dist = find_dist(settings.WEB_DIST)
+
+if _web_dist is None:
+
+    @app.get("/", include_in_schema=False)
+    async def root() -> JSONResponse:
+        """Dev mode: Vite owns the UI on :5173, so `/` is just a signpost."""
+        return JSONResponse(
+            {
+                "name": "URBAN TWIN API",
+                "contracts": contracts_version,
+                "docs": "/docs",
+                "health": "/health",
+                "websocket": "/ws/live",
+                "ui": "run `make dev` — the frontend is served by vite on :5173",
+            }
+        )
+else:
+    # production: one container, one port, API and UI together. Mounted last
+    # so the catch-all cannot shadow a router registered above it.
+    mount_spa(app, _web_dist)

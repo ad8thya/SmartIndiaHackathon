@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
-.PHONY: help setup dev down logs migrate revision seed smoke test test-py test-js fmt lint typecheck mine up up-full reset buildings clean
+.PHONY: help setup dev demo prod down logs migrate revision seed smoke test test-py test-js fmt lint typecheck mine up up-full reset buildings types clean
 
 # prefer 3.11/3.12 — some geo/ML wheels lag on the newest interpreter
 PYTHON_BIN := $(shell command -v python3.11 || command -v python3.12 || command -v python3)
@@ -49,6 +49,12 @@ up-full: ## start EVERYTHING in docker, api included
 dev: up migrate seed ## THE COMMAND: full system, mock data, hot reload
 	bash scripts/dev.sh
 
+demo: ## DEMO DAY: built frontend served by the api, one port, zero network
+	bash scripts/demo.sh
+
+prod: ## whole stack in docker, production shape, one container serves api + ui
+	docker compose -f docker-compose.prod.yml up --build
+
 down: ## stop containers (data survives)
 	$(COMPOSE) --profile full down
 
@@ -71,6 +77,9 @@ seed: ## load 6 Chennai routes, 6 buses, 3 school zones, ~40 events
 
 buildings: ## re-fetch OSM building footprints for the 3D twin (needs network)
 	$(PY) scripts/fetch_buildings.py --tagged-only
+
+types: ## regenerate the frontend's contract types from packages/contracts
+	$(PY) scripts/gen_frontend_types.py
 
 # ── quality ────────────────────────────────────────────────────────────────
 smoke: ## green/red checklist of every moving part
