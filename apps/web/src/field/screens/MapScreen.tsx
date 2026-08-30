@@ -1,33 +1,38 @@
 /**
- * A lightweight map for the crew. Owned by M6.
+ * The crew's map. Owned by M6.
  *
- * Deliberately NOT deck.gl: this runs on a mid-range Android phone on mobile
- * data at a roadside. An SVG scatter of the defects around you, drawn from the
- * same event list, costs nothing and answers the only question a crew has —
- * *what else is near me while I am here*.
+ * The real Chennai basemap — the same committed Protomaps extract the command
+ * centre uses — rendered through `LiteMap` (maplibre circle layers, one WebGL
+ * context, no extruded geometry). That keeps it fast on a mid-range Android
+ * phone at a roadside and, because the tiles ship with the app, it still
+ * works when there is no signal at all. It answers the only question a crew
+ * has while they are standing there: *what else is near me.*
  */
 
 import { useMemo, useState } from 'react';
-import { Crosshair, Layers } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { useField } from '../store';
+import { LiteMap, type LitePoint } from '../../components/LiteMap';
 
-/** Chennai bounding box the seeded network sits inside. */
-const BOUNDS = { minLon: 80.18, maxLon: 80.3, minLat: 12.97, maxLat: 13.13 };
+const SEVERITY_STYLE = {
+  LARGE: { color: '#ef4444', radius: 9 },
+  MEDIUM: { color: '#f59e0b', radius: 7 },
+  SMALL: { color: '#38bdf8', radius: 5 },
+} as const;
 
 export function MapScreen() {
   const events = useField((s) => s.events);
   const go = useField((s) => s.go);
   const [severityOnly, setSeverityOnly] = useState(false);
 
-  const points = useMemo(() => {
+  const points = useMemo<LitePoint[]>(() => {
     const visible = severityOnly ? events.filter((e) => e.severity === 'LARGE') : events;
     return visible.map((event) => ({
       id: event.event_id,
-      severity: event.severity,
-      status: event.status,
-      x: ((event.lon - BOUNDS.minLon) / (BOUNDS.maxLon - BOUNDS.minLon)) * 100,
-      y: (1 - (event.lat - BOUNDS.minLat) / (BOUNDS.maxLat - BOUNDS.minLat)) * 100,
-      label: event.detection_class.replace(/_/g, ' ').toLowerCase(),
+      lon: event.lon,
+      lat: event.lat,
+      label: `${event.detection_class.replace(/_/g, ' ').toLowerCase()} · ${event.severity.toLowerCase()}`,
+      ...SEVERITY_STYLE[event.severity],
     }));
   }, [events, severityOnly]);
 
@@ -35,7 +40,7 @@ export function MapScreen() {
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center justify-between border-b border-white/5 px-4 py-3">
         <div>
-          <h1 className="text-base font-bold tracking-tight">Nearby</h1>
+          <h1 className="text-base tracking-tight">Nearby</h1>
           <p className="text-[11px] text-slate-500">{points.length} defects in your zone</p>
         </div>
         <button
@@ -50,40 +55,9 @@ export function MapScreen() {
       </header>
 
       <div className="relative min-h-0 flex-1 bg-ink-800">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
-          {/* a faint grid so the plot reads as a map, not a scatter chart */}
-          {Array.from({ length: 9 }, (_, i) => (
-            <g key={i} stroke="#1d2740" strokeWidth="0.15">
-              <line x1={(i + 1) * 10} y1="0" x2={(i + 1) * 10} y2="100" />
-              <line x1="0" y1={(i + 1) * 10} x2="100" y2={(i + 1) * 10} />
-            </g>
-          ))}
+        <LiteMap theme="dark" points={points} onSelect={(id) => go('detail', id)} />
 
-          {points.map((point) => (
-            <circle
-              key={point.id}
-              cx={point.x}
-              cy={point.y}
-              r={point.severity === 'LARGE' ? 1.8 : point.severity === 'MEDIUM' ? 1.3 : 0.9}
-              className="cursor-pointer"
-              fill={
-                point.severity === 'LARGE'
-                  ? '#ef4444'
-                  : point.severity === 'MEDIUM'
-                    ? '#f59e0b'
-                    : '#38bdf8'
-              }
-              fillOpacity="0.85"
-              onClick={() => go('detail', point.id)}
-            />
-          ))}
-
-          {/* "you are here" — Chennai Central until real geolocation lands */}
-          <circle cx="75" cy="47" r="1.4" fill="#22d3ee" />
-          <circle cx="75" cy="47" r="3.5" fill="none" stroke="#22d3ee" strokeWidth="0.3" opacity="0.5" />
-        </svg>
-
-        <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-white/10 bg-ink-900/85 px-2.5 py-2 text-[10px] backdrop-blur">
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border border-white/10 bg-ink-900/85 px-2.5 py-2 text-[10px] backdrop-blur">
           {(['LARGE', 'MEDIUM', 'SMALL'] as const).map((severity) => (
             <div key={severity} className="flex items-center gap-1.5 py-0.5">
               <span
@@ -98,17 +72,13 @@ export function MapScreen() {
               <span className="text-slate-400">{severity.toLowerCase()}</span>
             </div>
           ))}
-          <div className="mt-1 flex items-center gap-1.5 border-t border-white/10 pt-1">
-            <Crosshair size={9} className="text-cyan-400" />
-            <span className="text-slate-400">you</span>
-          </div>
         </div>
       </div>
 
       <div className="shrink-0 border-t border-white/5 px-4 py-2">
         <p className="text-[10px] leading-relaxed text-slate-600">
-          Tap a dot to open the report. Deliberately lightweight — this runs on mobile data at a
-          roadside, not on a control-room GPU.
+          Tap a defect to open the report. Map tiles ship with the app, so this keeps working
+          with no signal.
         </p>
       </div>
     </div>

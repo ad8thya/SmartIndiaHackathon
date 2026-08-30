@@ -267,8 +267,8 @@ export interface NearMissEvent {
 
 export interface WhatIfRequest {
   closed_road_ids: string[];
-  horizon_minutes: number;
-  reason: string | null;
+  horizon_minutes?: number;
+  reason?: string | null;
 }
 
 export interface WhatIfResult {

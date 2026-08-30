@@ -58,6 +58,12 @@ MODELS = [
 
 ENUM_NAMES = {e.__name__ for e in ENUMS}
 
+#: Models the frontend *sends*. A field with a server-side default is optional
+#: for a caller, so it is emitted `field?:`. Response models keep every field
+#: required — the API always serialises them, and making them optional would
+#: force a needless `?.` at every read site.
+REQUEST_MODELS = {contracts.WhatIfRequest}
+
 
 def ts_type(annotation: object) -> str:
     """Map a python annotation to a TypeScript type string."""
@@ -102,9 +108,11 @@ def emit_enum(cls: type[enum.Enum]) -> str:
 
 def emit_model(cls: type[BaseModel]) -> str:
     name = RENAME.get(cls.__name__, cls.__name__)
+    optional_when_defaulted = cls in REQUEST_MODELS
     lines = [f"export interface {name} {{"]
     for field_name, field in cls.model_fields.items():
-        lines.append(f"  {field_name}: {ts_type(field.annotation)};")
+        mark = "?" if optional_when_defaulted and not field.is_required() else ""
+        lines.append(f"  {field_name}{mark}: {ts_type(field.annotation)};")
     lines.append("}\n")
     return "\n".join(lines)
 

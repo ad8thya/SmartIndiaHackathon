@@ -1,28 +1,28 @@
 /**
- * Lightweight map, same approach as apps/field/src/screens/MapScreen.tsx: an
- * SVG scatter over a normalised bounding box rather than a tile library —
- * this has to render instantly on a mid-range phone on mobile data.
+ * The role portal's map — the real basemap, not a drawing of one.
+ *
+ * Renders the committed Protomaps extract through `LiteMap` (maplibre circle
+ * layers, one WebGL context) so it stays smooth on a mid-range phone and
+ * works with no network at all. The hand-drawn `<svg>` grid this replaced
+ * was a placeholder, and it looked like one.
  *
  * Roads (`/api/roads`) don't carry geometry in the current contracts, only a
  * road_id/name and condition metrics — so instead of fabricating coordinates
- * for them, they get their own selectable list under the map ("Selected
- * road" panel), while the map itself plots the things that do have lat/lon:
- * events and buses.
+ * for them, they get their own selectable list beside the map, while the map
+ * plots the things that do have lat/lon: events and buses.
  */
 
 import { useMemo, useState } from 'react';
-import { Layers, Satellite, Signpost } from 'lucide-react';
+import { Layers, Moon, Sun } from 'lucide-react';
 import { useRoles } from '../store';
+import { LiteMap, type LiteBus, type LitePoint } from '../../components/LiteMap';
 import { RISK_BAND_COLOR, titleCase } from '../lib/api';
 
-const BOUNDS = { minLon: 80.18, maxLon: 80.3, minLat: 12.97, maxLat: 13.13 };
-
-function project(lon: number, lat: number) {
-  return {
-    x: ((lon - BOUNDS.minLon) / (BOUNDS.maxLon - BOUNDS.minLon)) * 100,
-    y: (1 - (lat - BOUNDS.minLat) / (BOUNDS.maxLat - BOUNDS.minLat)) * 100,
-  };
-}
+const SEVERITY_STYLE = {
+  LARGE: { color: '#ef4444', radius: 9 },
+  MEDIUM: { color: '#f59e0b', radius: 7 },
+  SMALL: { color: '#6D46C8', radius: 5 },
+} as const;
 
 export function MapScreen() {
   const events = useRoles((s) => s.scopedEvents());
@@ -35,23 +35,24 @@ export function MapScreen() {
   const openDetail = useRoles((s) => s.openDetail);
   const [severityOnly, setSeverityOnly] = useState(false);
 
-  const points = useMemo(() => {
+  const points = useMemo<LitePoint[]>(() => {
     const visible = severityOnly ? events.filter((e) => e.severity === 'LARGE') : events;
     return visible.map((event) => ({
       id: event.event_id,
-      severity: event.severity,
-      label: titleCase(event.detection_class),
-      ...project(event.lon, event.lat),
+      lon: event.lon,
+      lat: event.lat,
+      label: `${titleCase(event.detection_class)} · ${event.severity.toLowerCase()}`,
+      ...SEVERITY_STYLE[event.severity],
     }));
   }, [events, severityOnly]);
 
-  const busPoints = useMemo(
-    () => buses.map((bus) => ({ id: bus.bus_id, ...project(bus.lon, bus.lat) })),
+  const busPoints = useMemo<LiteBus[]>(
+    () => buses.map((bus) => ({ id: bus.bus_id, lon: bus.lon, lat: bus.lat, label: bus.bus_id })),
     [buses],
   );
 
   const selectedRoad = roads.find((r) => r.road_id === selectedRoadId) ?? null;
-  const isSatellite = mapStyle === 'satellite';
+  const isDark = mapStyle === 'dark';
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
@@ -64,11 +65,11 @@ export function MapScreen() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMapStyle(isSatellite ? 'street' : 'satellite')}
+              onClick={() => setMapStyle(isDark ? 'light' : 'dark')}
               className="flex h-9 items-center gap-1.5 rounded-full bg-surface2 px-3 text-[11px] text-ink"
             >
-              {isSatellite ? <Signpost size={13} /> : <Satellite size={13} />}
-              {isSatellite ? 'Street' : 'Satellite'}
+              {isDark ? <Sun size={13} /> : <Moon size={13} />}
+              {isDark ? 'Light' : 'Dark'}
             </button>
             <button
               type="button"
@@ -82,48 +83,17 @@ export function MapScreen() {
           </div>
         </header>
 
-        <div
-          className={`relative min-h-0 flex-1 ${isSatellite ? 'bg-[#1c2417]' : 'bg-surface2'}`}
-        >
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full">
-            {Array.from({ length: 9 }, (_, i) => (
-              <g key={i} stroke={isSatellite ? '#3a4530' : '#E4E3DE'} strokeWidth="0.15">
-                <line x1={(i + 1) * 10} y1="0" x2={(i + 1) * 10} y2="100" />
-                <line x1="0" y1={(i + 1) * 10} x2="100" y2={(i + 1) * 10} />
-              </g>
-            ))}
-
-            {busPoints.map((bus) => (
-              <rect
-                key={bus.id}
-                x={bus.x - 0.8}
-                y={bus.y - 0.8}
-                width="1.6"
-                height="1.6"
-                rx="0.4"
-                fill={isSatellite ? '#7DD3FC' : '#2563EB'}
-              />
-            ))}
-
-            {points.map((point) => (
-              <circle
-                key={point.id}
-                cx={point.x}
-                cy={point.y}
-                r={point.severity === 'LARGE' ? 1.8 : point.severity === 'MEDIUM' ? 1.3 : 0.9}
-                className="cursor-pointer"
-                fill={
-                  point.severity === 'LARGE' ? '#ef4444' : point.severity === 'MEDIUM' ? '#f59e0b' : '#6D46C8'
-                }
-                fillOpacity="0.9"
-                onClick={() => openDetail('event', point.id)}
-              />
-            ))}
-          </svg>
+        <div className="relative min-h-0 flex-1">
+          <LiteMap
+            theme={isDark ? 'dark' : 'light'}
+            points={points}
+            buses={busPoints}
+            onSelect={(id) => openDetail('event', id)}
+          />
 
           <div
             className={`pointer-events-none absolute bottom-3 left-3 rounded-lg border px-2.5 py-2 text-[10px] backdrop-blur ${
-              isSatellite ? 'border-white/10 bg-black/60 text-slate-200' : 'border-line bg-surface/90 text-ink'
+              isDark ? 'border-white/10 bg-black/60 text-slate-200' : 'border-line bg-surface/90 text-ink'
             }`}
           >
             {(['LARGE', 'MEDIUM', 'SMALL'] as const).map((severity) => (

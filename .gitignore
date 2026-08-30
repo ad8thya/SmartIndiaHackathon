@@ -49,3 +49,6 @@ wandb/
 
 # typescript incremental build info
 apps/*/tsconfig.tsbuildinfo
+
+# vite build output
+apps/web/dist/

@@ -1,18 +1,58 @@
 /**
- * MapLibre dark style. Owned by M6.
+ * Real basemap, zero network. Owned by M6.
  *
- * Two of them: a hosted CARTO vector style for when there is network, and a
- * fully self-contained fallback that needs none. The fallback is not a nicety —
- * hackathon venue wifi fails, and a twin that renders buildings, routes, buses
- * and events over a flat dark ground is still a working demo. A blank white
- * screen is not.
+ * The vector tiles are a committed Protomaps extract of the seeded route
+ * extent + 2 km (`public/map/chennai.pmtiles`, ~9 MB), served by the app
+ * itself and decoded by the pmtiles protocol. Glyphs and sprites are vendored
+ * under `public/map/` too — so streets, water, parks and labels all render
+ * with the venue wifi dead. No API key, no tile server, no fallback needed:
+ * the offline path IS the primary path.
+ *
+ * Light + dark are the same tiles with different Protomaps themes: operator
+ * screens run dark, the citizen-facing screens run light.
  */
 
+import maplibregl from 'maplibre-gl';
+import { Protocol } from 'pmtiles';
+import themeLayers from 'protomaps-themes-base';
 import type { StyleSpecification } from 'maplibre-gl';
 
-export const CARTO_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+let protocolRegistered = false;
 
-/** No sources, no network, no tiles. Just the ground the twin sits on. */
+function ensureProtocol(): void {
+  if (protocolRegistered) return;
+  maplibregl.addProtocol('pmtiles', new Protocol().tile);
+  protocolRegistered = true;
+}
+
+/** The two Protomaps theme names this app ships sprites for. */
+export type MapTheme = 'light' | 'dark';
+
+export function buildMapStyle(theme: MapTheme): StyleSpecification {
+  ensureProtocol();
+  const origin = window.location.origin;
+  return {
+    version: 8,
+    name: `urban-twin-${theme}`,
+    glyphs: `${origin}/map/fonts/{fontstack}/{range}.pbf`,
+    sprite: `${origin}/map/sprites/v4/${theme}`,
+    sources: {
+      protomaps: {
+        type: 'vector',
+        url: `pmtiles://${origin}/map/chennai.pmtiles`,
+        attribution: '© OpenStreetMap · Protomaps',
+      },
+    },
+    // The default export is the one that takes a theme *name* and returns the
+    // ground and the labels together, fully painted. The named `layers()`
+    // export expects a Theme object instead, and handing it a string yields
+    // 56 layers with empty `paint` — an invisible map that still "renders".
+    layers: themeLayers('protomaps', theme, 'en'),
+  } as StyleSpecification;
+}
+
+/** Kept for tests and as a belt-and-braces fallback if the pmtiles file is
+ * missing from a fresh partial clone. */
 export const OFFLINE_DARK: StyleSpecification = {
   version: 8,
   name: 'urban-twin-offline-dark',
@@ -20,19 +60,10 @@ export const OFFLINE_DARK: StyleSpecification = {
   layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#080b14' } }],
 };
 
-/**
- * Probe the hosted style once. Returns the URL if reachable, otherwise the
- * inline fallback. Called once at mount — never per render.
- */
-export async function resolveMapStyle(
-  timeoutMs = 2500,
-): Promise<string | StyleSpecification> {
+/** The committed extract is the style now — no CDN probe, no network. */
+export async function resolveMapStyle(): Promise<StyleSpecification> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch(CARTO_DARK, { signal: controller.signal });
-    clearTimeout(timer);
-    return response.ok ? CARTO_DARK : OFFLINE_DARK;
+    return buildMapStyle('dark');
   } catch {
     return OFFLINE_DARK;
   }

@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
+import { TripsLayer } from '@deck.gl/geo-layers';
 import type { PickingInfo } from '@deck.gl/core';
 // aliased: an unqualified `Map` here would shadow the global Map constructor,
 // which this file uses for the bus-interpolation cache
@@ -24,7 +25,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import { useStore } from '../store/useStore';
 import { loadBuildings } from '../lib/api';
-import { INITIAL_VIEW, OFFLINE_DARK, resolveMapStyle } from '../lib/mapStyle';
+import { INITIAL_VIEW, OFFLINE_DARK, buildMapStyle } from '../lib/mapStyle';
 import { RISK_BAND_HEX, congestionColor, hexToRgba, statusColor } from '../lib/colors';
 import type {
   BusPosition,
@@ -102,6 +103,57 @@ function useSmoothedBuses(buses: BusPosition[]): BusRender[] {
   });
 }
 
+interface BusTrail {
+  busId: string;
+  path: LonLat[];
+  timestamps: number[];
+}
+
+/**
+ * Rolling trajectory per bus for the TripsLayer playback trail. Timestamps
+ * are seconds since page load, so `currentTime` can just be the clock.
+ */
+function useBusTrails(buses: BusPosition[]): { trails: BusTrail[]; now: number } {
+  const store = useRef(new Map<string, BusTrail>());
+  const t0 = useRef(performance.now());
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    const clock = (performance.now() - t0.current) / 1000;
+    for (const bus of buses) {
+      const trail = store.current.get(bus.bus_id) ?? {
+        busId: bus.bus_id,
+        path: [],
+        timestamps: [],
+      };
+      const last = trail.path[trail.path.length - 1];
+      if (!last || last[0] !== bus.lon || last[1] !== bus.lat) {
+        trail.path.push([bus.lon, bus.lat]);
+        trail.timestamps.push(clock);
+        // keep a bounded window — the trail is a read of "where has this bus
+        // just been", not a full history
+        if (trail.path.length > 120) {
+          trail.path.shift();
+          trail.timestamps.shift();
+        }
+      }
+      store.current.set(bus.bus_id, trail);
+    }
+  }, [buses]);
+
+  useEffect(() => {
+    let frame = 0;
+    const tick = () => {
+      setNow((performance.now() - t0.current) / 1000);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return { trails: [...store.current.values()], now };
+}
+
 export function MapCanvas() {
   const events = useStore((s) => s.visibleEvents());
   const routes = useStore((s) => s.routes);
@@ -116,17 +168,26 @@ export function MapCanvas() {
   const selectRoad = useStore((s) => s.selectRoad);
   const selectEvent = useStore((s) => s.selectEvent);
 
-  const [mapStyle, setMapStyle] = useState<string | StyleSpecification>(OFFLINE_DARK);
   const [buildings, setBuildings] = useState<GeoJsonFeatureCollection | null>(null);
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null);
 
+  // the basemap is a committed PMTiles extract served by this app — built
+  // synchronously, no probe, no CDN, works with the wifi off
+  const mapStyle = useMemo<StyleSpecification>(() => {
+    try {
+      return buildMapStyle('dark');
+    } catch {
+      return OFFLINE_DARK;
+    }
+  }, []);
+
   useEffect(() => {
-    resolveMapStyle().then(setMapStyle);
     // fetched once from a cached local file — never from Overpass at runtime
     loadBuildings().then(setBuildings);
   }, []);
 
   const smoothedBuses = useSmoothedBuses(buses);
+  const { trails, now } = useBusTrails(buses);
 
   /** congestion per route, averaged over that route's segments */
   const routeCongestion = useMemo(() => {
@@ -142,18 +203,41 @@ export function MapCanvas() {
     return averaged;
   }, [roads]);
 
+  /**
+   * These two must keep a stable identity across renders. The bus animation
+   * re-renders this component every frame; deck.gl compares `data` by
+   * reference, so rebuilding these arrays inline would re-tesselate 7,177
+   * building footprints sixty times a second.
+   */
+  const buildingData = useMemo(
+    () =>
+      (buildings?.features ?? []).map((feature) => ({
+        polygon: (feature.geometry.coordinates as LonLat[][])[0] ?? [],
+        height: Number(feature.properties.height ?? 12),
+      })),
+    [buildings],
+  );
+
+  const routeData = useMemo(
+    () =>
+      routes.map((route) => ({
+        path: route.polyline,
+        routeId: route.route_id,
+        name: route.name,
+        congestion: routeCongestion.get(route.route_id) ?? 20,
+      })),
+    [routes, routeCongestion],
+  );
+
   const layers = useMemo(() => {
     const list = [];
 
     // 1 ── the twin itself
-    if (showBuildings && buildings) {
+    if (showBuildings && buildingData.length) {
       list.push(
         new PolygonLayer<{ polygon: LonLat[]; height: number }>({
           id: 'buildings',
-          data: buildings.features.map((feature) => ({
-            polygon: (feature.geometry.coordinates as LonLat[][])[0] ?? [],
-            height: Number(feature.properties.height ?? 12),
-          })),
+          data: buildingData,
           extruded: true,
           filled: true,
           wireframe: false,
@@ -172,12 +256,7 @@ export function MapCanvas() {
     list.push(
       new PathLayer<{ path: LonLat[]; routeId: string; name: string; congestion: number }>({
         id: 'routes',
-        data: routes.map((route) => ({
-          path: route.polyline,
-          routeId: route.route_id,
-          name: route.name,
-          congestion: routeCongestion.get(route.route_id) ?? 20,
-        })),
+        data: routeData,
         getPath: (d) => d.path,
         getColor: (d) => congestionColor(d.congestion, 210),
         getWidth: 5,
@@ -341,6 +420,25 @@ export function MapCanvas() {
       );
     }
 
+    // 4.8 ── trajectory playback: a fading trail behind each bus
+    if (trails.length) {
+      list.push(
+        new TripsLayer<BusTrail>({
+          id: 'bus-trails',
+          data: trails,
+          getPath: (d) => d.path,
+          getTimestamps: (d) => d.timestamps,
+          getColor: [56, 189, 248, 160],
+          widthMinPixels: 3,
+          capRounded: true,
+          jointRounded: true,
+          fadeTrail: true,
+          trailLength: 45,
+          currentTime: now,
+        }),
+      );
+    }
+
     // 5 ── the fleet, on top of everything
     list.push(
       new IconLayer<BusRender>({
@@ -384,12 +482,13 @@ export function MapCanvas() {
 
     return list;
   }, [
-    buildings,
+    buildingData,
     events,
     nearMisses,
+    now,
     roads,
     routes,
-    routeCongestion,
+    routeData,
     selectEvent,
     selectRoad,
     selectedEventId,
@@ -398,6 +497,7 @@ export function MapCanvas() {
     showHeatmap,
     showRiskLayer,
     smoothedBuses,
+    trails,
   ]);
 
   return (

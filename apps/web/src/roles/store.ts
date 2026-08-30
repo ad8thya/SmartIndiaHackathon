@@ -57,7 +57,8 @@ interface State {
   whatIfResults: WhatIfResult[];
 
   selectedBusId: string | null;
-  mapStyle: 'street' | 'satellite';
+  /** basemap theme — both come from the same committed PMTiles extract */
+  mapStyle: 'light' | 'dark';
   selectedRoadId: string | null;
 
   loading: boolean;
@@ -75,7 +76,7 @@ interface State {
   openDetail: (kind: Exclude<DetailKind, null>, id: string) => void;
   closeDetail: () => void;
 
-  setMapStyle: (style: 'street' | 'satellite') => void;
+  setMapStyle: (style: 'light' | 'dark') => void;
   selectRoad: (id: string | null) => void;
   selectBus: (id: string | null) => void;
 
@@ -127,7 +128,7 @@ export const useRoles = create<State>((set, get) => ({
   whatIfResults: [],
 
   selectedBusId: null,
-  mapStyle: 'street',
+  mapStyle: 'light',
   selectedRoadId: null,
 
   loading: false,
