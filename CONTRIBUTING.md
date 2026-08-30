@@ -16,7 +16,7 @@ One long-lived branch per person. You work on yours all week.
 | `m3-fusion` | M3 | `services/edge/pedestrian/**`, `services/cloud/consensus/**`, `panels/RiskPanel.tsx` |
 | `m4-incidents` | M4 | `services/edge/incidents/**`, `panels/IncidentsPanel.tsx` |
 | `m5-platform` | M5 | `services/cloud/api/**`, `services/tools/replay/**`, `packages/db/**`, `scripts/**` |
-| `m6-frontend` | M6 | `apps/command/src/**` (except `panels/`), `apps/field/**` |
+| `m6-frontend` | M6 | `apps/web/src/**` (except `panels/`) — includes `field/` and `roles/` |
 
 `main` is protected. **No direct pushes, by anyone, including whoever set the
 repo up.**

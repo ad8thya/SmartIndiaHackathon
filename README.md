@@ -160,14 +160,14 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
 | Event validation & multi-bus consensus | `services/cloud/consensus` — noisy-OR confidence + the `DETECTED → AI_VERIFIED → AUTHORITY_NOTIFIED` ladder |
 | Central database | PostGIS on Postgres (`packages/db`) |
 | AI Intelligence Layer | `services/cloud/intelligence/urban_risk` (Urban Risk Index), `services/cloud/intelligence/recommend` (Maintenance Recommendation Engine), `services/cloud/intelligence/traffic_analytics` + `services/cloud/intelligence/whatif` (congestion / route delay), `services/edge/incidents/near_miss.py` (incident + near-miss severity) |
-| GIS & Digital Twin | `apps/command` — MapLibre + deck.gl, 3D twin at 45° pitch, road-health / congestion / risk-band heatmaps |
-| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command centre and `apps/field`. Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
-| End users (RBAC) | Command centre (dispatch desk) + field app (repair crews) today; `apps/roles/` reserves a folder per RBAC role for the portals below, not yet built |
+| GIS & Digital Twin | `apps/web` — MapLibre + deck.gl over a committed PMTiles basemap, 3D twin at 45° pitch, road-health / congestion / risk-band layers |
+| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command console and the field app at `/field`. Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
+| End users (RBAC) | All eight roles are built, in one app: `/app/:role`. The six operator roles get the desktop console; Citizen and Bus Driver get purpose-built phone-shaped screens |
 
 ### Role split (RBAC) — who the product is for
 
 Distinct from "who builds it" (§5 below), this is who **uses** it once built.
-Placeholder folders only — `apps/roles/<role>/`, no app code yet.
+All eight are built and live at `/app/:role` in the one app.
 
 | Role | View | Report | AI Analytics | Approve | Admin |
 |---|---|---|---|---|---|
@@ -180,7 +180,10 @@ Placeholder folders only — `apps/roles/<role>/`, no app code yet.
 | Urban Planner | Analytics | Export | Full Analytics | ❌ | ❌ |
 | Smart City Admin | Everything | Everything | Everything | Everything | ✅ |
 
-Full matrix and per-role notes: `apps/roles/README.md`.
+Full matrix and per-role notes: `apps/web/README.md`. The Citizen row is the
+one place the RBAC split changes the *data* rather than the layout — the
+public map is served only confirmed, acted-on events, with no confidence
+scores or bus ids attached.
 
 **The one idea that makes six people possible:** nothing imports anybody's
 implementation. Every module boundary is a `typing.Protocol` in
@@ -194,34 +197,33 @@ table above — is a one-line change inside one folder.
 
 ```bash
 cp .env.example .env
-make setup        # venv + python deps + npm install in all three frontend apps
-make dev          # docker infra, migrations, seed, api, replay, all three UIs
+make setup        # venv + python deps + npm install
+make dev          # docker infra, migrations, seed, api, replay, the UI
 ```
 
-Then open:
+**One app, one port.** Everything is `http://localhost:5173`:
 
 | what | where |
 |---|---|
-| Command centre | <http://localhost:5173> |
-| Field app | <http://localhost:5174> (also on your phone, same wifi) |
-| Role portal | <http://localhost:5175> (also on your phone, same wifi) |
+| Role picker (landing) | <http://localhost:5173/> |
+| A role | <http://localhost:5173/app/municipal-authority> |
+| Field app | <http://localhost:5173/field> (also on your phone, same wifi) |
 | API docs | <http://localhost:8000/docs> |
 
-`make dev` prints your laptop's LAN IP and the phone-reachable URLs for the
-field app and role portal on startup. Open that URL from a phone on the same
-wifi and it's the same app, same code, same hot reload — no separate mobile
-build. This works because the vite dev servers bind `--host` (reachable from
-any device on the network, not just the laptop) and the api's CORS policy
-(`services/cloud/api/config.py`) explicitly allows any private-LAN origin,
-not just `localhost`.
+`make dev` prints your laptop's LAN IP on startup. Open that from a phone on
+the same wifi and it's the same app, same code, same hot reload — no separate
+mobile build. The vite dev server binds `--host`, and the api's CORS policy
+(`services/cloud/api/config.py`) allows any private-LAN origin, not just
+`localhost`.
 
-Deploying so it's reachable outside your LAN (a real URL, not just a wifi
-IP) is a separate step: put the api behind a public host/reverse proxy, set
-`VITE_API_BASE_URL` for each frontend build to that api's public URL, and
-`CORS_ORIGINS` (or `CORS_ORIGIN_REGEX`) to the frontend's deployed origin(s).
-None of the three frontend apps need code changes for that — they're plain
-static Vite builds (`npm run build` → `dist/`) that can go on any static
-host.
+**On demo day, use `make demo` instead.** It builds the frontend once and
+serves it from the API on a single port, with no dev server and no external
+network at all — map tiles, fonts and building footprints are committed to
+this repo. Test it with the wifi off; venue networks fail.
+
+Deploying it somewhere public is `make prod` (or see **DEPLOY.md** for
+Railway / Render / Fly). The production image serves the API and the UI from
+one container on one port, so there is no CORS to configure.
 
 Sanity check any time: `make smoke`
 
@@ -267,7 +269,7 @@ Corollaries worth stating out loud:
 ## 5 · Who owns what
 
 This is the **engineering split** — six people, six code modules. Not to be
-confused with the **RBAC role split** in §2 (`apps/roles/`) — those are the
+confused with the **RBAC role split** in §2 (`/app/:role`) — those are the
 product's end users, not dev assignments.
 
 Every module has the identical internal shape, so all six of you are looking at
@@ -290,7 +292,7 @@ services/<module>/
 **Files you own**
 ```
 services/edge/defects/**
-apps/command/src/panels/DefectsPanel.tsx
+apps/web/src/panels/DefectsPanel.tsx
 ```
 
 **Your Protocol**
@@ -329,9 +331,9 @@ type chips, evidence thumbnails, SLA countdown per row.
 services/cloud/intelligence/traffic_analytics/**
 services/cloud/intelligence/whatif/**
 services/cloud/intelligence/recommend/**                        (AI intelligence layer — added v1.1.0)
-apps/command/src/panels/TrafficPanel.tsx
-apps/command/src/panels/WhatIfPanel.tsx
-apps/command/src/panels/IntelligencePanel.tsx (you contribute; M3 owns the file)
+apps/web/src/panels/TrafficPanel.tsx
+apps/web/src/panels/WhatIfPanel.tsx
+apps/web/src/panels/IntelligencePanel.tsx (you contribute; M3 owns the file)
 ```
 
 **Your Protocols**
@@ -382,8 +384,8 @@ go/no-go verdict.
 services/edge/pedestrian/**
 services/cloud/consensus/**
 services/cloud/intelligence/urban_risk/**                              (AI intelligence layer — added v1.1.0)
-apps/command/src/panels/RiskPanel.tsx
-apps/command/src/panels/IntelligencePanel.tsx  (you own this one; M2 contributes)
+apps/web/src/panels/RiskPanel.tsx
+apps/web/src/panels/IntelligencePanel.tsx  (you own this one; M2 contributes)
 ```
 
 **Your Protocols**
@@ -440,7 +442,7 @@ flags: `USE_REAL_PEDESTRIAN`, `USE_REAL_FUSION`, `USE_REAL_RISK`
 **Files you own**
 ```
 services/edge/incidents/**
-apps/command/src/panels/IncidentsPanel.tsx
+apps/web/src/panels/IncidentsPanel.tsx
 ```
 
 **Your Protocol**
@@ -515,11 +517,12 @@ so you are never blocked on your own merge conflicts.
 
 **Files you own**
 ```
-apps/command/src/App.tsx, components/**, lib/**, store/**, styles/**, test/**
-apps/field/**                                  (the entire mobile app)
-scripts/fetch_buildings.py
+apps/web/src/{App,main}.tsx, components/**, lib/**, store/**, styles/**, test/**
+apps/web/src/field/**                          (the mobile app, at /field)
+apps/web/src/roles/**                          (the role shell + phone screens)
+scripts/fetch_buildings.py, scripts/gen_frontend_types.py
 ```
-You do **not** own `apps/command/src/panels/*` — those belong to M1–M4.
+You do **not** own `apps/web/src/panels/*` — those belong to M1–M4.
 
 **Your contract with the panel owners** — every panel receives exactly:
 ```ts
@@ -528,7 +531,7 @@ You do **not** own `apps/command/src/panels/*` — those belong to M1–M4.
 and is mounted inside an `ErrorBoundary` labelled with its owner, so a crash is
 contained and routes itself to the right person.
 
-**Your commands** · `cd apps/command && npm run test` · `make buildings`
+**Your commands** · `cd apps/web && npm run test` · `make buildings` · `make types`
 
 **7-day plan**
 
@@ -663,12 +666,13 @@ the hook missed it.
 In order of likelihood:
 
 1. **No WebGL2.** Check `chrome://gpu`. Remote desktop and some VMs disable it.
-2. **The base map failed to load.** That is survivable — `lib/mapStyle.ts` probes
-   the CARTO style once and falls back to a self-contained dark background.
-   Buildings, routes, buses and events still render. If *those* are missing, it
-   is not the base map.
+2. **The base map failed to load.** Unlikely now — `lib/mapStyle.ts` reads a
+   PMTiles archive committed to this repo and served by the app itself, with
+   no CDN and no API key. If the streets are missing but buildings, routes and
+   buses render, check that `apps/web/public/map/chennai.pmtiles` survived the
+   clone (it is ~17 MB; a partial or LFS-less checkout can drop it).
 3. **No buildings file.** `make buildings` writes
-   `apps/command/public/data/buildings.geojson` — 7,177 real OSM footprints,
+   `apps/web/public/data/buildings.geojson` — 7,177 real OSM footprints,
    bounded to the six seeded routes + 500 m, filtered to buildings that declare
    `height` or `building:levels` (~1.8 MB). Dropping the filter pulls 146k
    footprints and 31 MB, which deck.gl will render but nobody wants in git.
@@ -700,7 +704,7 @@ If it disconnects while nothing is being edited:
 Something on your machine already owns the port. Find it:
 
 ```bash
-lsof -i :5432 -i :6379 -i :1883 -i :8000 -i :5173 -i :5174
+lsof -i :5432 -i :6379 -i :1883 -i :8000 -i :5173
 ```
 
 The two that actually happen:
@@ -769,8 +773,10 @@ call the matching `reset_*()` afterwards — e.g. `reset_defect_detector()`.
 ## 9 · Command reference
 
 ```bash
-make setup       # venv, python deps, npm install in both apps
-make dev         # THE COMMAND — everything, hot reload
+make setup       # venv, python deps, npm install
+make dev         # THE COMMAND — everything, hot reload, one port
+make demo        # DEMO DAY — built UI served by the api, zero network
+make prod        # the whole stack in docker, production shape
 make up          # just postgres + redis + mosquitto
 make down        # stop containers (data survives)
 make reset       # stop containers AND wipe the database volume
@@ -779,6 +785,7 @@ make migrate     # apply alembic migrations
 make revision m="add xyz"
 make seed        # 6 routes, 6 buses, 3 school zones, ~40 events
 make buildings   # re-fetch OSM footprints (bounded to the routes, ~1.8 MB)
+make types       # regenerate the frontend contract types from packages/contracts
 
 make smoke       # green/red checklist of every moving part
 make test        # everything, python + frontend
