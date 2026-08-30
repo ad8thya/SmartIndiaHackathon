@@ -228,6 +228,28 @@ written *only by `scripts/seed.py`*. The MQTT bridge puts them in memory and now
 | `services/cloud/api/routers/events.py:144` | `get_event` hand-rolls the memory-then-postgres lookup instead of calling `merged_events()` | M5 | Cosmetic; behaviour is already correct |
 | `services/cloud/api/mqtt_bridge.py:103` | Observations land in memory only. **M2 cannot span an API restart** with `TRAFFIC_WINDOW_MINUTES`, and `event_observations` has nothing to point at | M5 (M2 blocked) | Needs batched inserts — at 6 buses × 15 fps a per-message round trip will not keep up. A day-1 platform decision |
 
+### The frontend contract is hand-mirrored three times, not shared
+
+`packages/contracts` is the one frozen schema, but there is no npm workspace linking
+the three Vite apps (`command`, `field`, `roles`) to each other or to it — each has
+its own `lib/api.ts` with its own hand-typed copy of `DetectionClass`, `Event`,
+`BusPosition`, etc. That is a deliberate original trade-off (`apps/field`'s header
+comment: "the field app must stay installable and buildable on its own"), but it
+means a contracts rename has to be applied three times by hand, and nothing enforces
+that it was. It already drifted once:
+
+| File | Symptom | Why deferred |
+|---|---|---|
+| `apps/command/src/lib/types.ts`, `apps/command/src/lib/colors.ts` | Had `MISSING_SIGN` / `FADED_ZEBRA` (pre-rename) while `packages/contracts/src/contracts/enums.py` had already moved to `DAMAGED_SIGN` / `ZEBRA_CROSSING` (commits `c4b3229`, `477b8df`, `c74f206`). Fixed 2026-08-30 — `CLASS_LABEL[event.detection_class]` was rendering `undefined` for those two classes. | `apps/command/src/lib/types.ts`'s own header comment claims a `contractsAreInSync` test at `src/test/contracts.test.ts` "fetches the live OpenAPI schema and fails if this file has drifted" — **that file does not exist** (`apps/command/src/test/` only has `lib.test.ts`, `panels.test.tsx`, `setup.ts`). The safety net described in the code was never built, which is exactly how this drift went uncaught. |
+| `apps/field/src/lib/api.ts`, `apps/roles/src/lib/api.ts` | Currently in sync with `enums.py` (checked 2026-08-30) — but nothing besides manual vigilance keeps them that way | Same root cause as above; not wired into the same drift-detection test as `command` |
+
+**Not fixed**: making these apps share one generated or hand-written type module (an
+npm workspace + a `packages/frontend-contracts` package, or a small codegen step off
+`packages/contracts`'s OpenAPI schema). That is real, if not large, refactor work,
+and three independently-buildable Vite apps was itself a deliberate choice — so this
+is flagged as a design tension to resolve deliberately, not patched around by whoever
+next touches an enum.
+
 ### Declined, with reasoning
 
 | Item | Decision | Why |
