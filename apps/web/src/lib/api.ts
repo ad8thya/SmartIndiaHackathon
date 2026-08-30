@@ -42,15 +42,15 @@ import type {
  * So: an explicit VITE_API_BASE_URL always wins; otherwise the vite dev port
  * is the one case that needs the swap, and everything else is same-origin.
  */
-const VITE_DEV_PORT = '5173';
-
 function resolveApiOrigin(): string {
   const explicit = import.meta.env.VITE_API_BASE_URL as string | undefined;
   if (explicit) return explicit;
 
   const port = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
-  if (window.location.port === VITE_DEV_PORT) {
-    // dev: hostname, not "localhost", so a phone on the LAN still resolves it
+  if (import.meta.env.DEV) {
+    // dev: hostname, not "localhost", so a phone on the LAN still resolves it.
+    // We check DEV rather than a hardcoded port so it works even when Vite
+    // auto-increments from 5173 to 5174/5175/… due to port conflicts.
     return `${window.location.protocol}//${window.location.hostname}:${port}`;
   }
   return window.location.origin;
