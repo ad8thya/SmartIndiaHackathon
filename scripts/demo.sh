@@ -18,7 +18,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 cd "$(dirname "$0")/.."
+# `.env` supplies DEFAULTS. Anything already set in the caller's environment
+# wins — otherwise `API_PORT=8010 make demo` is silently ignored, because
+# `set -a; . ./.env` overwrites the variable the caller just passed. That made
+# the port-conflict advice below impossible to follow.
+_preset_api_port="${API_PORT:-}"
 set -a; [ -f .env ] && . ./.env; set +a
+[ -n "$_preset_api_port" ] && API_PORT="$_preset_api_port"
 
 VENV=.venv
 PY="$VENV/bin/python"
@@ -65,6 +71,25 @@ do
 done
 [ "$missing" -eq 0 ] || exit 1
 
+# ── 2b. is the port actually ours? ───────────────────────────────────────────
+# macOS will happily let us bind 0.0.0.0:$PORT while something else already
+# holds 127.0.0.1:$PORT — and then the browser, which resolves localhost to the
+# loopback address, talks to the OTHER process. The demo comes up, the map
+# renders, and every API call returns someone else's 404. There is no error
+# anywhere to explain it. Catch it here instead of on stage.
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo ""
+  echo "  ✗ something is already listening on port $PORT:"
+  lsof -nP -iTCP:"$PORT" -sTCP:LISTEN | awk 'NR>1 {printf "      %s (pid %s) on %s\n", $1, $2, $9}'
+  echo ""
+  echo "    Even if the demo appears to start, your browser will reach that"
+  echo "    process instead of this one. Stop it, or pick another port:"
+  echo ""
+  echo "        API_PORT=8010 make demo"
+  echo ""
+  exit 1
+fi
+
 # ── 3. infrastructure + data ─────────────────────────────────────────────────
 echo "  starting postgres, redis, mosquitto…"
 docker compose up -d postgres redis mosquitto >/dev/null 2>&1
@@ -90,8 +115,13 @@ echo "  └───────────────────────
 echo ""
 
 # ── 4. the two processes ─────────────────────────────────────────────────────
-# WEB_DIST is what makes the api serve the built UI (services/cloud/api/spa.py)
-run 36 api WEB_DIST=apps/web/dist "$PY" -m uvicorn services.cloud.api.main:app \
+# WEB_DIST is what makes the api serve the built UI (services/cloud/api/spa.py).
+#
+# It has to go through `env`: run() executes its arguments as an argv array,
+# and a leading VAR=value is only an assignment when a *shell* parses the line.
+# Passed as argv[0] it is just a command name, and the api never starts —
+# which is precisely the kind of failure you find on stage.
+run 36 api env WEB_DIST=apps/web/dist "$PY" -m uvicorn services.cloud.api.main:app \
   --host 0.0.0.0 --port "$PORT"
 
 # wait for /health rather than sleeping a guessed number of seconds

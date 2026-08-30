@@ -26,11 +26,37 @@ import type {
   WorkflowStatus,
 } from './types';
 
-const API_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
+/**
+ * Where the API lives, from the browser's point of view.
+ *
+ * Two deployments, two answers, and getting this wrong breaks exactly one of
+ * them — silently, and only once it is deployed:
+ *
+ *   · **dev** — vite serves the page on :5173 and the API is a separate
+ *     process on :8000, so the port has to be swapped.
+ *   · **demo / production** — FastAPI serves the page itself, so the API is
+ *     on the *same origin*. Appending :8000 there points at a port nothing is
+ *     listening on: on Railway the page is https://host (443) and every call
+ *     would go to https://host:8000 and fail.
+ *
+ * So: an explicit VITE_API_BASE_URL always wins; otherwise the vite dev port
+ * is the one case that needs the swap, and everything else is same-origin.
+ */
+const VITE_DEV_PORT = '5173';
 
-export const API_BASE: string =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
-  `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
+function resolveApiOrigin(): string {
+  const explicit = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (explicit) return explicit;
+
+  const port = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
+  if (window.location.port === VITE_DEV_PORT) {
+    // dev: hostname, not "localhost", so a phone on the LAN still resolves it
+    return `${window.location.protocol}//${window.location.hostname}:${port}`;
+  }
+  return window.location.origin;
+}
+
+export const API_BASE: string = resolveApiOrigin();
 
 export class ApiError extends Error {
   constructor(

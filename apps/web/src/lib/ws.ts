@@ -7,14 +7,15 @@
  * a second against a server that is still booting.
  */
 
+import { API_BASE } from './api';
 import type { WSMessage, WSMessageType } from './types';
 
-const WS_PORT = (import.meta.env.VITE_API_PORT as string | undefined) ?? '8000';
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
+/** Same reasoning as `api.ts`'s resolveApiOrigin — derived from it so the two
+ * can never disagree about where the backend is. On a deployed https origin
+ * this yields wss://host/ws/live, not wss://host:8000/ws/live. */
 export const WS_URL: string =
   (import.meta.env.VITE_WS_URL as string | undefined) ??
-  `${wsProtocol}//${window.location.hostname}:${WS_PORT}/ws/live`;
+  `${API_BASE.replace(/^http/, 'ws')}/ws/live`;
 
 export type WSHandler = (message: WSMessage) => void;
 export type ConnectionState = 'connecting' | 'open' | 'closed';

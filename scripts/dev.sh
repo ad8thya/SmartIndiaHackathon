@@ -6,7 +6,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 cd "$(dirname "$0")/.."
+# `.env` supplies DEFAULTS. Anything already set in the caller's environment
+# wins — otherwise `API_PORT=8010 make demo` is silently ignored, because
+# `set -a; . ./.env` overwrites the variable the caller just passed. That made
+# the port-conflict advice below impossible to follow.
+_preset_api_port="${API_PORT:-}"
 set -a; [ -f .env ] && . ./.env; set +a
+[ -n "$_preset_api_port" ] && API_PORT="$_preset_api_port"
 
 VENV=.venv
 PY="$VENV/bin/python"

@@ -7,6 +7,55 @@
 
 ---
 
+## 0 · The two things that will actually bite you
+
+Both verified against this repo, not guessed. Read these before you start;
+they are the only non-obvious steps.
+
+### 1. `DATABASE_URL` must say `+asyncpg`
+
+Every managed provider hands you a URL like
+`postgresql://user:pass@host:5432/db`. **Rewrite the scheme:**
+
+```
+postgresql+asyncpg://user:pass@host:5432/db
+```
+
+The confusing part, and the reason this wastes an hour: with the bare
+`postgresql://` form **the app starts perfectly fine** — it normalises the URL
+for its own engine. Only the migration fails, and it fails with an error that
+points at the wrong thing:
+
+```
+sqlalchemy.exc.InvalidRequestError: The asyncio extension requires an
+async driver to be used. The loaded 'psycopg2' is not async.
+```
+
+You will read "psycopg2 is not async" and go looking for a driver problem.
+There isn't one. Add `+asyncpg` to the URL and it passes.
+
+### 2. Your database user needs permission to create an extension
+
+You do **not** need to run `CREATE EXTENSION postgis` yourself — migration
+0001's first statement is `CREATE EXTENSION IF NOT EXISTS postgis` (and
+`pg_trgm`), and it works on a completely empty database. Verified here against
+a fresh one with no extensions installed.
+
+What it needs is a role allowed to do that, and a provider that actually ships
+the PostGIS library:
+
+| provider | works out of the box? |
+|---|---|
+| Railway, Fly.io | yes — the default user can create extensions |
+| Render | usually; if `CREATE EXTENSION` is denied, enable PostGIS from the dashboard first |
+| Supabase, Neon | PostGIS must be enabled in their extensions UI first |
+
+If you see `permission denied to create extension "postgis"`, that is this —
+not a schema problem. Enable it from the provider's console, then re-run the
+migration.
+
+---
+
 ## 1 · The two ways to run it
 
 | | command | what you get |
@@ -24,6 +73,14 @@ make demo          # then TURN THE WIFI OFF and reload the page
 curl localhost:8000/health
 ```
 
+`make demo` refuses to start if anything already holds that port. That check
+exists because macOS will let it bind `0.0.0.0:8000` while another process
+holds `127.0.0.1:8000`, and your browser — which resolves localhost to the
+loopback address — then talks to the *other* process. The UI comes up, the map
+renders, and every API call returns someone else's 404, with nothing anywhere
+to explain why. If the check fires, stop the other process or run
+`API_PORT=8010 make demo`.
+
 The map, fonts, building footprints and the whole UI are committed to this
 repo and served from localhost. A dead venue network changes nothing. The only
 step that needs the internet is the very first `docker compose pull`, so do
@@ -36,8 +93,11 @@ that at home.
 `GET /health` returns `200` with a per-dependency breakdown:
 
 ```json
-{ "ok": true, "database": true, "postgis": true, "redis": true,
-  "mqtt": true, "version": "1.1.0", "detail": {} }
+{ "ok": true, "database": true, "postgis": true, "redis": true, "mqtt": true,
+  "version": "0.1.0",
+  "detail": { "postgis_version": "3.4 USE_GEOS=1 USE_PROJ=1 USE_STATS=1",
+              "buses_tracked": "6", "events_cached": "0",
+              "observations_buffered": "2" } }
 ```
 
 It reports `ok: true` when the API can serve requests, and names any degraded
@@ -56,15 +116,18 @@ Railway builds the Dockerfile and injects `PORT`. Nothing else is needed.
 
 1. **New project → Deploy from GitHub repo**, pick this repo.
 2. Settings → Build → **Dockerfile path**: `infra/Dockerfile`.
-3. **Add PostgreSQL** from the Railway marketplace. It sets `DATABASE_URL` on
-   the service automatically — but with the `postgresql://` scheme, and this
-   app uses asyncpg, so override it (see §6).
-4. **PostGIS**: Railway's postgres does not enable it by default. Connect once
-   and run `CREATE EXTENSION IF NOT EXISTS postgis;` — the migration expects it
-   to exist. Without it, migration 0001 fails on the first geography column.
-5. Set the variables in §6.
-6. Run the migration once, from the Railway shell:
-   `alembic -c packages/db/alembic.ini upgrade head && python scripts/seed.py`
+3. **Add PostgreSQL** from the Railway marketplace. It sets `DATABASE_URL`
+   automatically, with the `postgresql://` scheme — **override it with the
+   `+asyncpg` form** (trap 1 above), otherwise step 5 fails.
+4. Set the variables in §6.
+5. Run the migration and seed once, from the Railway shell:
+
+   ```bash
+   alembic -c packages/db/alembic.ini upgrade head
+   python scripts/seed.py
+   ```
+
+   The migration creates the PostGIS extension itself (trap 2).
 
 Redis and MQTT are **optional**: with neither reachable the API still serves
 every REST route and the WebSocket. You lose the replay simulator's live feed,
@@ -76,19 +139,26 @@ the deployed URL.
 1. **New → Web Service**, connect the repo.
 2. Runtime **Docker**, Dockerfile path `infra/Dockerfile`.
 3. Health check path `/health`.
-4. Add a **Render PostgreSQL** instance; enable PostGIS the same way as above.
+4. Add a **Render PostgreSQL** instance. Copy its *Internal* connection string
+   and rewrite the scheme to `postgresql+asyncpg://` (trap 1).
 5. Variables from §6. Render injects `PORT`; the container listens on 8000, so
    either leave Render's default port detection alone or set `PORT=8000`.
+6. Run the migration once from the Render shell, as in the Railway steps.
 
 ## 5 · Fly.io
 
 ```bash
 fly launch --dockerfile infra/Dockerfile --no-deploy
 fly postgres create --name urban-twin-db
-fly postgres attach urban-twin-db          # sets DATABASE_URL
-fly postgres connect -a urban-twin-db      # then: CREATE EXTENSION postgis;
+fly postgres attach urban-twin-db          # sets DATABASE_URL — see below
 fly secrets set PLATE_HASH_SALT="$(openssl rand -hex 32)"
+
+# `attach` writes the bare postgresql:// form. Rewrite it (trap 1):
+fly secrets set DATABASE_URL="postgresql+asyncpg://<user>:<pass>@<host>:5432/<db>"
+
 fly deploy
+fly ssh console -C "alembic -c packages/db/alembic.ini upgrade head"
+fly ssh console -C "python scripts/seed.py"
 ```
 
 In `fly.toml` set `internal_port = 8000` and point the http check at `/health`.
@@ -104,7 +174,7 @@ matter in a deployment.
 
 | variable | required | what it does |
 |---|---|---|
-| `DATABASE_URL` | **yes** | Must use the **asyncpg** driver: `postgresql+asyncpg://user:pass@host:5432/db`. A managed provider will hand you `postgresql://…` — rewrite the scheme or the app will not start. |
+| `DATABASE_URL` | **yes** | Must use the **asyncpg** driver: `postgresql+asyncpg://user:pass@host:5432/db`. A provider hands you `postgresql://…` — rewrite it. The app tolerates the bare form; the *migration* does not. See trap 1. |
 | `PLATE_HASH_SALT` | **yes** | Salt for the SHA-256 plate hashes (DPDP Act 2023 §8). Leaving the default makes the hashes reversible by anyone with this repo. `openssl rand -hex 32`. |
 | `PORT` | no | Host port for `docker-compose.prod.yml`. Railway/Render/Fly inject their own; leave unset there. |
 | `WEB_DIST` | no | Where the built UI lives. The image needs no value — the build lands at `/app/web` and is found automatically. Set it only to serve a build from a source checkout. |
@@ -145,14 +215,6 @@ in `spa.py`. On Vercel, add `apps/web/vercel.json` with a rewrite of
 ---
 
 ## 8 · Things that will bite you
-
-**`DATABASE_URL` scheme.** Managed postgres hands you `postgresql://`. This app
-needs `postgresql+asyncpg://`. Alembic derives its own sync URL from the same
-value, so fix it in one place.
-
-**PostGIS is not installed by default** on Railway, Render or Fly postgres.
-`CREATE EXTENSION postgis;` once, before the first migration. The symptom is
-migration 0001 failing on `geography(Point,4326)`.
 
 **The image is ~250 MB** because the map extract and glyphs are baked in. That
 is the deliberate trade for a demo that survives a dead network — don't
