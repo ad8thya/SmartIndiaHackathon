@@ -17,8 +17,8 @@ export type DetectionClass =
   | 'ALLIGATOR_CRACK'
   | 'WATERLOGGING'
   | 'DAMAGED_DIVIDER'
-  | 'MISSING_SIGN'
-  | 'FADED_ZEBRA'
+  | 'DAMAGED_SIGN'
+  | 'ZEBRA_CROSSING'
   | 'VEHICLE'
   | 'PEDESTRIAN'
   | 'PEDESTRIAN_RISK'
@@ -72,8 +72,8 @@ export const INFRASTRUCTURE_CLASSES: readonly DetectionClass[] = [
   'ALLIGATOR_CRACK',
   'WATERLOGGING',
   'DAMAGED_DIVIDER',
-  'MISSING_SIGN',
-  'FADED_ZEBRA',
+  'DAMAGED_SIGN',
+  'ZEBRA_CROSSING',
 ] as const;
 
 export const WORKFLOW_ORDER: readonly WorkflowStatus[] = [
