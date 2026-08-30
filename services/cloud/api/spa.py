@@ -65,18 +65,23 @@ def mount_spa(app: FastAPI, dist: Path) -> None:
         if directory.is_dir():
             app.mount(f"/{public}", StaticFiles(directory=directory), name=public)
 
-    # response_model=None: the union return type is a Response, not a schema
+    root = dist.resolve()
+
+    # Deliberately `def`, not `async def`: it stats the filesystem, and
+    # Starlette runs sync handlers in a threadpool rather than blocking the
+    # event loop on every 404.
+    # response_model=None: the union return type is a Response, not a schema.
     @app.get("/{full_path:path}", include_in_schema=False, response_model=None)
-    async def spa_fallback(request: Request, full_path: str) -> FileResponse | JSONResponse:
-        path = "/" + full_path
-        if path.startswith(API_PREFIXES):
+    def spa_fallback(request: Request, full_path: str) -> FileResponse | JSONResponse:
+        if ("/" + full_path).startswith(API_PREFIXES):
             # a genuinely unknown API route — say so, rather than handing back
             # an HTML page that the caller will fail to parse as JSON
             return JSONResponse({"detail": "Not Found"}, status_code=404)
 
-        # a real file (favicon, manifest, robots.txt…) wins over the fallback
+        # a real file (favicon, manifest, robots.txt…) wins over the fallback.
+        # is_relative_to keeps `../` out of the served tree.
         candidate = (dist / full_path).resolve()
-        if full_path and candidate.is_file() and candidate.is_relative_to(dist.resolve()):
+        if full_path and candidate.is_relative_to(root) and candidate.is_file():
             return FileResponse(candidate)
 
         return FileResponse(index)
