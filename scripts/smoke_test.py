@@ -342,7 +342,7 @@ def check_api(report: Report) -> None:
 def check_frontend(report: Report) -> None:
     section("frontend")
     root = Path(__file__).resolve().parents[1]
-    for app_dir in ("apps/command", "apps/field"):
+    for app_dir in ("apps/command", "apps/field", "apps/roles"):
         installed = (root / app_dir / "node_modules").is_dir()
         report.add(
             f"{app_dir} dependencies installed",

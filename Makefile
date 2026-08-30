@@ -35,6 +35,7 @@ setup: ## create venv, install python + node deps, generate .env if missing
 	echo "→ traffic owner (M2):                                   $(PIP) install -e '.[geo]'"
 	cd apps/command && npm install --silent
 	cd apps/field   && npm install --silent
+	cd apps/roles   && npm install --silent
 	echo ""
 	echo "  ✔ setup complete →  make dev"
 

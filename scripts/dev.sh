@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Runs the four hot-reloading processes side by side and kills them all
+# Runs the five hot-reloading processes side by side and kills them all
 # together on Ctrl-C. Logs are prefixed and colourised so six people can read
 # one terminal.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -27,12 +27,21 @@ run() { # run <colour> <label> <cmd...>
   PIDS+=($!)
 }
 
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
+
 echo ""
 echo "  ┌──────────────────────────────────────────────────────────┐"
 echo "  │  URBAN TWIN is starting                                  │"
 echo "  │    command centre  →  http://localhost:5173              │"
 echo "  │    field app       →  http://localhost:5174              │"
-echo "  │    api docs        →  http://localhost:8000/docs         │"
+echo "  │    role portal     →  http://localhost:5175              │"
+echo "  │    api docs        →  http://localhost:${API_PORT:-8000}/docs         │"
+if [ -n "$LAN_IP" ]; then
+echo "  │                                                            │"
+echo "  │  on your phone (same wifi):                               │"
+echo "  │    field app       →  http://$LAN_IP:5174              │"
+echo "  │    role portal     →  http://$LAN_IP:5175              │"
+fi
 echo "  └──────────────────────────────────────────────────────────┘"
 echo ""
 
@@ -41,5 +50,6 @@ sleep 2
 run 35 replay "$PY" -m services.tools.replay --speed "${REPLAY_SPEED:-60}" --buses "${REPLAY_BUSES:-6}" --loop
 run 32 command npm --prefix apps/command run dev -- --host --port 5173
 run 33 field   npm --prefix apps/field   run dev -- --host --port 5174
+run 34 roles   npm --prefix apps/roles   run dev -- --host --port 5175
 
 wait

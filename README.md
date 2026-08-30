@@ -194,8 +194,8 @@ table above — is a one-line change inside one folder.
 
 ```bash
 cp .env.example .env
-make setup        # venv + python deps + npm install in both apps
-make dev          # docker infra, migrations, seed, api, replay, both UIs
+make setup        # venv + python deps + npm install in all three frontend apps
+make dev          # docker infra, migrations, seed, api, replay, all three UIs
 ```
 
 Then open:
@@ -204,7 +204,24 @@ Then open:
 |---|---|
 | Command centre | <http://localhost:5173> |
 | Field app | <http://localhost:5174> (also on your phone, same wifi) |
+| Role portal | <http://localhost:5175> (also on your phone, same wifi) |
 | API docs | <http://localhost:8000/docs> |
+
+`make dev` prints your laptop's LAN IP and the phone-reachable URLs for the
+field app and role portal on startup. Open that URL from a phone on the same
+wifi and it's the same app, same code, same hot reload — no separate mobile
+build. This works because the vite dev servers bind `--host` (reachable from
+any device on the network, not just the laptop) and the api's CORS policy
+(`services/cloud/api/config.py`) explicitly allows any private-LAN origin,
+not just `localhost`.
+
+Deploying so it's reachable outside your LAN (a real URL, not just a wifi
+IP) is a separate step: put the api behind a public host/reverse proxy, set
+`VITE_API_BASE_URL` for each frontend build to that api's public URL, and
+`CORS_ORIGINS` (or `CORS_ORIGIN_REGEX`) to the frontend's deployed origin(s).
+None of the three frontend apps need code changes for that — they're plain
+static Vite builds (`npm run build` → `dist/`) that can go on any static
+host.
 
 Sanity check any time: `make smoke`
 

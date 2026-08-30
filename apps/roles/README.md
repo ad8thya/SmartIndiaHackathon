@@ -1,9 +1,22 @@
-# Role Portals (RBAC)
+# Role Portal (RBAC)
 
-Placeholder tree — **no app code here yet**. Each subfolder reserves the
-place for a role-scoped frontend; today `apps/command` and `apps/field`
-remain the two working apps. This is where a future per-role portal (or a
-role-scoped view inside command/field) lands once built.
+`urban-twin-roles` — a single responsive web app (`npm run dev` on port
+5175, same as `apps/command`/`apps/field`) that implements every row of the
+RBAC matrix below as one data-driven shell rather than eight separate apps.
+
+The subfolders (`bus-driver/`, `citizen/`, etc.) are docs only — one README
+per role explaining its permissions. The actual behavior for all eight
+lives in `src/roles/config.ts`: which tabs a role sees, which detection
+classes its feed is scoped to, and whether it can approve/dispatch. Change
+a role's permissions there, not by writing a new app.
+
+Screens are shared across roles (`src/screens/Feed.tsx`, `MapScreen.tsx`,
+`Detail.tsx`, `Analytics.tsx`, ...); `src/store.ts` gates what each screen
+loads and which actions it exposes off `ROLES[role].permissions`.
+
+Mobile vs. desktop is the same story as `apps/field`: one bundle, one URL,
+a bottom tab bar under the `lg` breakpoint and a sidebar + wide content area
+above it (see `src/components/{TabBar,Sidebar}.tsx`).
 
 ## RBAC matrix
 
