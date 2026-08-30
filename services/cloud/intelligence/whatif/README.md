@@ -24,8 +24,8 @@ Invariants:
 ```
 services/cloud/intelligence/traffic_analytics/   (your other half)
 services/cloud/intelligence/whatif/              (this module)
-apps/command/src/panels/TrafficPanel.tsx
-apps/command/src/panels/WhatIfPanel.tsx
+apps/web/src/panels/TrafficPanel.tsx
+apps/web/src/panels/WhatIfPanel.tsx
 ```
 
 ## Mock behaviour

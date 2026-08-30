@@ -313,8 +313,8 @@ Settled. Do not reopen these mid-week without a team conversation.
 
 | | Count | Command |
 |---|---|---|
-| Python tests | **245** | `make test-py` / `.venv/bin/pytest` |
-| Frontend tests | **26** (2 files) | `cd apps/command && npm run test -- --run` |
+| Python tests | **257** | `make test-py` / `.venv/bin/pytest` |
+| Frontend tests | **38** (3 files) | `cd apps/web && npm run test -- --run` |
 | Smoke checks | **34** | `make smoke` |
 | Everything | | `make test` |
 
@@ -324,9 +324,9 @@ Settled. Do not reopen these mid-week without a team conversation.
 |---|---|
 | `packages/contracts/test_contracts.py` | 45 |
 | `services/cloud/api/test_module.py` | 38 |
-| `services/cloud/consensus/test_module.py` | 29 |
+| `services/cloud/consensus/test_module.py` | 36 |
 | `services/cloud/intelligence/urban_risk/test_module.py` | 20 |
-| `services/cloud/intelligence/whatif/test_module.py` | 16 |
+| `services/cloud/intelligence/whatif/test_module.py` | 20 |
 | `services/edge/incidents/test_near_miss.py` | 15 |
 | `services/tools/replay/test_module.py` | 15 |
 | `services/cloud/intelligence/traffic_analytics/test_module.py` | 14 |
@@ -367,7 +367,7 @@ Runs **only your module's tests**, detecting who you are from your git branch
 | m3 | `services/edge/pedestrian`, `services/cloud/consensus`, `services/cloud/intelligence/urban_risk` |
 | m4 | `services/edge/incidents` (includes `near_miss.py` + its tests) |
 | m5 | `services/cloud/api`, `packages/db`, `scripts` |
-| m6 | `packages/contracts` (+ `npm run test` in `apps/command`) |
+| m6 | `packages/contracts` (+ `npm run test` in `apps/web`) |
 
 ### Quality gates
 
