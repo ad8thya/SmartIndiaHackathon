@@ -18,7 +18,7 @@ export function EventTicker() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-white/5 px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <span className="text-[10px] font-medium tracking-widest text-slate-500">
           Live feed
         </span>
         <span className="font-mono text-[10px] text-slate-600">{ticker.length}</span>

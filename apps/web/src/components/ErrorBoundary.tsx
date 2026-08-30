@@ -40,7 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="m-3 rounded-lg border border-red-500/30 bg-red-500/5 p-4 text-sm">
-        <div className="flex items-center gap-2 font-semibold text-red-300">
+        <div className="flex items-center gap-2 font-medium text-red-300">
           <AlertTriangle size={16} />
           {this.props.label} crashed
         </div>

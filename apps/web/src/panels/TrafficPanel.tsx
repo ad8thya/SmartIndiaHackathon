@@ -85,13 +85,13 @@ export function TrafficPanel({ roads, selected, onSelect }: PanelProps) {
           <span className="flex items-center gap-1.5">
             <Flame size={13} /> Congestion heatmap
           </span>
-          <span className="font-mono text-[10px] uppercase">{showHeatmap ? 'on' : 'off'}</span>
+          <span className="font-mono text-[10px]">{showHeatmap ? 'on' : 'off'}</span>
         </button>
       </div>
 
       {/* ── bottlenecks chart ─────────────────────────────────────────── */}
       <div className="border-b border-white/5 p-3">
-        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="mb-2 text-[10px] font-medium tracking-widest text-slate-500">
           Worst corridors now
         </h3>
         <div className="h-40">
@@ -145,7 +145,7 @@ export function TrafficPanel({ roads, selected, onSelect }: PanelProps) {
 
       {/* ── every corridor ────────────────────────────────────────────── */}
       <div className="flex-1">
-        <h3 className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="px-3 pb-1 pt-3 text-[10px] font-medium tracking-widest text-slate-500">
           All corridors
         </h3>
         {sorted.map((road) => (
@@ -165,7 +165,7 @@ export function TrafficPanel({ roads, selected, onSelect }: PanelProps) {
               <span className="block font-mono text-xs text-slate-300">
                 {road.avg_speed_kmph.toFixed(0)} km/h
               </span>
-              <span className={`text-[9px] uppercase ${riskChipClass(road.risk_level).split(' ')[1]}`}>
+              <span className={`text-[9px] ${riskChipClass(road.risk_level).split(' ')[1]}`}>
                 {road.risk_level}
               </span>
             </span>
@@ -192,10 +192,10 @@ function RoadDetail({ road }: { road: RoadCondition }) {
     <div className="border-b border-white/5 bg-ink-900/40 p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">{road.name}</h3>
+          <h3 className="text-sm font-medium text-slate-100">{road.name}</h3>
           <p className="font-mono text-[10px] text-slate-500">{road.road_id}</p>
         </div>
-        <span className={`rounded border px-2 py-0.5 text-[10px] uppercase ${riskChipClass(road.risk_level)}`}>
+        <span className={`rounded border px-2 py-0.5 text-[10px] ${riskChipClass(road.risk_level)}`}>
           {road.risk_level}
         </span>
       </div>
@@ -208,7 +208,7 @@ function RoadDetail({ road }: { road: RoadCondition }) {
       </dl>
 
       <div className="mt-3">
-        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
+        <div className="flex items-center justify-between text-[10px] tracking-wider text-slate-500">
           <span>Pavement condition index</span>
           <span className="font-mono text-slate-300">{road.pci_score.toFixed(0)}/100</span>
         </div>
@@ -253,10 +253,10 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border border-white/10 bg-ink-700/60 px-2 py-2">
-      <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider ${tone === 'warn' ? 'text-amber-400' : 'text-slate-500'}`}>
+      <div className={`flex items-center gap-1 text-[10px] tracking-wider ${tone === 'warn' ? 'text-amber-400' : 'text-slate-500'}`}>
         {icon} {label}
       </div>
-      <div className="mt-0.5 font-mono text-sm font-semibold text-slate-100">{value}</div>
+      <div className="mt-0.5 font-mono text-sm font-medium text-slate-100">{value}</div>
     </div>
   );
 }
@@ -264,7 +264,7 @@ function Stat({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-white/5 bg-ink-800/60 px-2 py-1.5">
-      <dt className="text-[10px] uppercase tracking-wider text-slate-500">{label}</dt>
+      <dt className="text-[10px] tracking-wider text-slate-500">{label}</dt>
       <dd className="font-mono text-xs text-slate-200">{value}</dd>
     </div>
   );

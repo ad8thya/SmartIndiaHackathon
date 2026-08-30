@@ -71,7 +71,7 @@ export function Detail() {
         >
           <ArrowLeft size={19} />
         </button>
-        <h1 className="truncate text-sm font-semibold">
+        <h1 className="truncate text-sm font-medium">
           {event.detection_class.replace(/_/g, ' ').toLowerCase()}
         </h1>
       </header>
@@ -158,7 +158,7 @@ export function Detail() {
                   setNotes('');
                   go('feed');
                 }}
-                className={`flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-semibold active:opacity-80 ${action.tone}`}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-medium active:opacity-80 ${action.tone}`}
               >
                 {action.icon} {action.label}
               </button>
@@ -181,7 +181,7 @@ function Fact({
 }) {
   return (
     <div className="rounded-xl border border-white/5 bg-ink-800 px-3 py-2.5">
-      <dt className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500">
+      <dt className="flex items-center gap-1 text-[10px] tracking-wider text-slate-500">
         {icon} {label}
       </dt>
       <dd className="mt-1 truncate font-mono text-xs text-slate-200">{value}</dd>

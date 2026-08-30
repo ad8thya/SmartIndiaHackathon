@@ -216,7 +216,7 @@ function Dossier({
               {incident.plate_hash && (
                 <div className="rounded-lg border border-white/10 bg-ink-900/60 p-2.5">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                    <span className="text-[10px] tracking-wider text-slate-500">
                       Plate evidence
                     </span>
                     {incident.plate_confidence != null && (
@@ -254,7 +254,7 @@ function Dossier({
 
               {incident.evidence_uris.length > 0 && (
                 <div>
-                  <span className="mb-1.5 block text-[10px] uppercase tracking-wider text-slate-500">
+                  <span className="mb-1.5 block text-[10px] tracking-wider text-slate-500">
                     Frames ({incident.evidence_uris.length})
                   </span>
                   <div className="flex gap-1.5 overflow-x-auto">
@@ -303,13 +303,13 @@ function Stat({
       }`}
     >
       <div
-        className={`font-mono text-lg font-semibold leading-none ${
+        className={`font-mono text-lg font-medium leading-none ${
           tone === 'danger' ? 'text-red-300' : 'text-slate-100'
         }`}
       >
         {value}
       </div>
-      <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
+      <div className="mt-1 text-[10px] tracking-wider text-slate-400">{label}</div>
     </div>
   );
 }
@@ -325,7 +325,7 @@ function Field({
 }) {
   return (
     <div className="rounded border border-white/5 bg-ink-800/60 px-2 py-1.5">
-      <dt className="flex items-center gap-1 uppercase tracking-wider text-slate-500">
+      <dt className="flex items-center gap-1 tracking-wider text-slate-500">
         {icon} {label}
       </dt>
       <dd className="mt-0.5 truncate font-mono text-slate-300">{value}</dd>

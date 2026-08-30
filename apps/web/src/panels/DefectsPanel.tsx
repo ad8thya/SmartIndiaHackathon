@@ -80,10 +80,10 @@ export function DefectsPanel({ events, selected, onSelect }: PanelProps) {
                 active ? severityChipClass(severity) : 'border-white/10 bg-ink-700/60 hover:bg-ink-600/60'
               }`}
             >
-              <div className="font-mono text-lg font-semibold leading-none text-slate-100">
+              <div className="font-mono text-lg font-medium leading-none text-slate-100">
                 {counts.bySeverity[severity]}
               </div>
-              <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-400">
+              <div className="mt-1 text-[10px] tracking-wider text-slate-400">
                 {severity}
               </div>
             </button>
@@ -93,7 +93,7 @@ export function DefectsPanel({ events, selected, onSelect }: PanelProps) {
 
       {/* ── class filter chips ────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-1.5 border-b border-white/5 px-3 py-2">
-        <span className="flex items-center gap-1 pr-1 text-[10px] uppercase tracking-wider text-slate-500">
+        <span className="flex items-center gap-1 pr-1 text-[10px] tracking-wider text-slate-500">
           <Filter size={11} /> Type
         </span>
         {counts.byClass.map(([detectionClass, count]) => {
@@ -165,7 +165,7 @@ function DefectRow({
         <span className="flex-1 truncate text-xs font-medium text-slate-200">
           {CLASS_LABEL[event.detection_class]}
         </span>
-        <span className={`rounded border px-1.5 py-0.5 text-[9px] uppercase ${severityChipClass(event.severity)}`}>
+        <span className={`rounded border px-1.5 py-0.5 text-[9px] ${severityChipClass(event.severity)}`}>
           {event.severity}
         </span>
         <ChevronRight size={13} className="text-slate-600" />

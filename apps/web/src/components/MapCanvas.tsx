@@ -11,12 +11,12 @@
  *   5 IconLayer        buses, interpolated between position updates
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DeckGL from '@deck.gl/react';
 import { IconLayer, PathLayer, PolygonLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
-import type { PickingInfo } from '@deck.gl/core';
+import { FlyToInterpolator, type PickingInfo } from '@deck.gl/core';
 // aliased: an unqualified `Map` here would shadow the global Map constructor,
 // which this file uses for the bus-interpolation cache
 import BaseMap from 'react-map-gl/maplibre';
@@ -27,6 +27,7 @@ import { useStore } from '../store/useStore';
 import { loadBuildings } from '../lib/api';
 import { INITIAL_VIEW, OFFLINE_DARK, buildMapStyle } from '../lib/mapStyle';
 import { RISK_BAND_HEX, congestionColor, hexToRgba, statusColor } from '../lib/colors';
+import { MOTION, STATUS_HEX } from '../lib/tokens';
 import type {
   BusPosition,
   GeoJsonFeatureCollection,
@@ -35,6 +36,11 @@ import type {
   RoadCondition,
   UTEvent,
 } from '../lib/types';
+
+/** one ring expansion, ms */
+const PULSE_MS = 1600;
+/** how many times a newly-escalated pin pulses before going quiet */
+const PULSE_REPEATS = 3;
 
 /** A warning-diamond SVG — deliberately distinct from the incident/event dots
  * so a near-miss never reads as "just another pothole pin". */
@@ -60,6 +66,18 @@ const BUS_ICON =
       <path d="M32 15 L40 34 L32 30 L24 34 Z" fill="#7dd3fc"/>
     </svg>`,
   );
+
+/** what this map holds in state — deck's own ViewState union is wider. */
+interface ViewState {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+  pitch: number;
+  bearing: number;
+  transitionDuration?: number;
+  transitionInterpolator?: FlyToInterpolator;
+  transitionEasing?: (t: number) => number;
+}
 
 interface BusRender extends BusPosition {
   renderLat: number;
@@ -156,6 +174,7 @@ function useBusTrails(buses: BusPosition[]): { trails: BusTrail[]; now: number }
 
 export function MapCanvas() {
   const events = useStore((s) => s.visibleEvents());
+  const eventsById = useStore((s) => s.events);
   const routes = useStore((s) => s.routes);
   const roads = useStore((s) => s.roads);
   const buses = useStore((s) => s.busList());
@@ -167,7 +186,9 @@ export function MapCanvas() {
   const selectedRoadId = useStore((s) => s.selectedRoadId);
   const selectRoad = useStore((s) => s.selectRoad);
   const selectEvent = useStore((s) => s.selectEvent);
+  const escalations = useStore((s) => s.escalations);
 
+  const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW);
   const [buildings, setBuildings] = useState<GeoJsonFeatureCollection | null>(null);
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null);
 
@@ -186,8 +207,60 @@ export function MapCanvas() {
     loadBuildings().then(setBuildings);
   }, []);
 
+  /**
+   * Fly to whatever was just selected, from anywhere — a list row, a ticker
+   * entry, an escalation toast. Eased and time-bounded rather than a jump,
+   * so an operator keeps their bearings: a map that teleports loses the
+   * viewer's mental model of where they were.
+   */
+  const flyTo = useCallback((lon: number, lat: number, zoom = 15) => {
+    setViewState((current) => ({
+      ...current,
+      longitude: lon,
+      latitude: lat,
+      zoom: Math.max(current.zoom, zoom),
+      transitionDuration: MOTION.flyTo,
+      transitionInterpolator: new FlyToInterpolator({ speed: 1.4 }),
+      transitionEasing: (t: number) => t * (2 - t), // easeOutQuad, never bouncy
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEventId) return;
+    const event = eventsById[selectedEventId];
+    if (event) flyTo(event.lon, event.lat);
+  }, [selectedEventId, eventsById, flyTo]);
+
   const smoothedBuses = useSmoothedBuses(buses);
   const { trails, now } = useBusTrails(buses);
+
+  /**
+   * Expanding rings on events that just climbed the fusion ladder. This is the
+   * one piece of motion on the map that is not decoration: it is how an
+   * operator notices that corroboration turned a guess into a work order,
+   * which is the entire thesis. Rings expand and fade, three times, then the
+   * escalation retires itself from the store.
+   */
+  const pulses = useMemo(() => {
+    const clock = Date.now();
+    return escalations
+      .map((item) => {
+        const event = eventsById[item.eventId];
+        if (!event) return null;
+        const age = clock - item.at;
+        if (age > PULSE_MS * PULSE_REPEATS) return null;
+        return {
+          eventId: item.eventId,
+          position: [event.lon, event.lat] as LonLat,
+          status: item.to,
+          phase: (age % PULSE_MS) / PULSE_MS,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+    // `now` is the animation clock — it ticks every frame, which is what keeps
+    // the rings expanding between store updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [escalations, eventsById, now]);
 
   /** congestion per route, averaged over that route's segments */
   const routeCongestion = useMemo(() => {
@@ -348,7 +421,28 @@ export function MapCanvas() {
       );
     }
 
-    // 4 ── events, colour by workflow status: grey → amber → green
+    // 3.8 ── consensus escalation rings — see `pulses` above
+    if (pulses.length) {
+      list.push(
+        new ScatterplotLayer<(typeof pulses)[number]>({
+          id: 'escalation-pulse',
+          data: pulses,
+          getPosition: (d) => d.position,
+          getRadius: (d) => 30 + d.phase * 320,
+          getFillColor: [0, 0, 0, 0],
+          getLineColor: (d) => hexToRgba(STATUS_HEX[d.status], Math.round(200 * (1 - d.phase))),
+          stroked: true,
+          filled: false,
+          lineWidthMinPixels: 2,
+          radiusMinPixels: 6,
+          radiusMaxPixels: 90,
+          pickable: false,
+          updateTriggers: { getRadius: now, getLineColor: now },
+        }),
+      );
+    }
+
+    // 4 ── events, colour by workflow status: grey → amber → red → green
     list.push(
       new ScatterplotLayer<UTEvent>({
         id: 'events',
@@ -473,7 +567,10 @@ export function MapCanvas() {
         getColor: [186, 230, 253, 230],
         getPixelOffset: [0, -26],
         fontFamily: 'Inter, system-ui, sans-serif',
-        fontWeight: 700,
+        fontWeight: 500,
+        // outlineWidth is ignored unless the glyph atlas is signed-distance-
+        // field; without this deck.gl warns and draws no outline at all
+        fontSettings: { sdf: true },
         outlineWidth: 2,
         outlineColor: [8, 11, 20, 255],
         characterSet: 'auto',
@@ -498,12 +595,14 @@ export function MapCanvas() {
     showRiskLayer,
     smoothedBuses,
     trails,
+    pulses,
   ]);
 
   return (
     <div className="relative h-full w-full">
       <DeckGL
-        initialViewState={INITIAL_VIEW}
+        viewState={viewState}
+        onViewStateChange={({ viewState: next }) => setViewState(next as ViewState)}
         controller={{ dragRotate: true, touchRotate: true }}
         layers={layers}
         getCursor={({ isDragging, isHovering }) =>
@@ -542,7 +641,7 @@ function MapLegend() {
   const showRiskLayer = useStore((s) => s.showRiskLayer);
   return (
     <div className="pointer-events-none absolute bottom-4 left-4 z-10 rounded-lg border border-white/10 bg-ink-800/85 px-3 py-2.5 text-[11px] text-slate-300 backdrop-blur">
-      <div className="mb-1.5 font-semibold uppercase tracking-wider text-slate-400">
+      <div className="mb-1.5 font-medium tracking-wider text-slate-400">
         Event status
       </div>
       <div className="flex flex-col gap-1">
@@ -559,15 +658,21 @@ function MapLegend() {
       </div>
       {showHeatmap && (
         <div className="mt-2 border-t border-white/10 pt-2">
-          <div className="mb-1 font-semibold uppercase tracking-wider text-slate-400">
+          <div className="mb-1 font-medium tracking-wider text-slate-400">
             Congestion
           </div>
-          <div className="h-1.5 w-28 rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500" />
+          {/* discrete steps, not a gradient — colour means something here, so
+              it should be readable off the legend rather than interpolated */}
+          <div className="flex w-28 gap-px overflow-hidden rounded-full">
+            {['#22c55e', '#a3e635', '#facc15', '#f97316', '#ef4444'].map((step) => (
+              <span key={step} className="h-1.5 flex-1" style={{ backgroundColor: step }} />
+            ))}
+          </div>
         </div>
       )}
       {showRiskLayer && (
         <div className="mt-2 border-t border-white/10 pt-2">
-          <div className="mb-1 font-semibold uppercase tracking-wider text-slate-400">
+          <div className="mb-1 font-medium tracking-wider text-slate-400">
             Urban risk band
           </div>
           <div className="flex flex-col gap-1">

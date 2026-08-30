@@ -20,8 +20,8 @@ export function Sidebar() {
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r border-line bg-surface p-3 lg:flex">
       <div className="mb-4 rounded-2xl bg-surface2 px-3 py-2.5">
-        <p className="text-[10px] uppercase tracking-wider text-muted">Signed in as</p>
-        <p className="truncate text-[13px] font-semibold text-ink">{config.label}</p>
+        <p className="text-[10px] tracking-wider text-muted">Signed in as</p>
+        <p className="truncate text-[13px] font-medium text-ink">{config.label}</p>
       </div>
 
       <nav className="flex flex-col gap-1">

@@ -82,23 +82,23 @@ export function RiskPanel({ events, selected, onSelect }: PanelProps) {
     <div className="flex h-full flex-col overflow-y-auto">
       {/* ── pedestrian risk ───────────────────────────────────────────── */}
       <div className="border-b border-white/5 p-3">
-        <h3 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="flex items-center gap-1.5 text-[10px] font-medium tracking-widest text-slate-500">
           <PersonStanding size={12} /> Pedestrian risk
         </h3>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-2.5 py-2">
-            <div className="font-mono text-lg font-semibold leading-none text-red-300">
+            <div className="font-mono text-lg font-medium leading-none text-red-300">
               {risks.length}
             </div>
-            <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-400">
+            <div className="mt-1 text-[10px] tracking-wider text-slate-400">
               Active risk zones
             </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-ink-700/60 px-2.5 py-2">
-            <div className="flex items-center gap-1 font-mono text-lg font-semibold leading-none text-sky-300">
+            <div className="flex items-center gap-1 font-mono text-lg font-medium leading-none text-sky-300">
               <GraduationCap size={16} /> {SCHOOL_ZONE_COUNT}
             </div>
-            <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-400">
+            <div className="mt-1 text-[10px] tracking-wider text-slate-400">
               School zones monitored
             </div>
           </div>
@@ -126,7 +126,7 @@ export function RiskPanel({ events, selected, onSelect }: PanelProps) {
 
       {/* ── the confidence ladder ─────────────────────────────────────── */}
       <div className="p-3">
-        <h3 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="flex items-center gap-1.5 text-[10px] font-medium tracking-widest text-slate-500">
           <Layers size={12} /> Fusion confidence ladder
         </h3>
         <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
@@ -148,12 +148,12 @@ export function RiskPanel({ events, selected, onSelect }: PanelProps) {
               >
                 <div className="flex items-center gap-2">
                   <span
-                    className={`rounded border px-1.5 py-0.5 text-[9px] uppercase ${statusChipClass(rung.status)}`}
+                    className={`rounded border px-1.5 py-0.5 text-[9px] ${statusChipClass(rung.status)}`}
                   >
                     {STATUS_LABEL[rung.status]}
                   </span>
                   <span className="flex-1 font-mono text-[10px] text-slate-400">{rung.rule}</span>
-                  <span className="font-mono text-xs font-semibold text-slate-200">{count}</span>
+                  <span className="font-mono text-xs font-medium text-slate-200">{count}</span>
                 </div>
                 <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink-900">
                   <div

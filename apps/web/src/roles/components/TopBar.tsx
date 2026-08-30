@@ -14,10 +14,10 @@ export function TopBar() {
   return (
     <header className="flex shrink-0 items-center justify-between border-b border-line bg-surface px-4 py-3 lg:px-6">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
           U
         </span>
-        <span className="text-[13px] font-semibold tracking-tight text-ink">URBAN TWIN</span>
+        <span className="text-[13px] font-medium tracking-tight text-ink">URBAN TWIN</span>
       </div>
 
       <button

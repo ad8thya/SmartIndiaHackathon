@@ -67,7 +67,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="border-b border-white/5 p-3">
-        <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="text-[10px] font-medium tracking-widest text-slate-500">
           1 · Choose roads to close
         </h3>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
@@ -116,7 +116,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
 
       {/* ── run ───────────────────────────────────────────────────────── */}
       <div className="border-b border-white/5 p-3">
-        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="mb-2 text-[10px] font-medium tracking-widest text-slate-500">
           2 · Reason
         </h3>
         <div className="mb-3 flex flex-wrap gap-1.5">
@@ -141,7 +141,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
             type="button"
             onClick={() => void run()}
             disabled={closed.length === 0 || running}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-sky-500 px-3 py-2 text-xs font-semibold text-ink-900 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-ink-600 disabled:text-slate-500"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-sky-500 px-3 py-2 text-xs font-medium text-ink-900 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-ink-600 disabled:text-slate-500"
           >
             <Play size={13} />
             {running ? 'Simulating…' : `Close ${closed.length || 0} road${closed.length === 1 ? '' : 's'}`}
@@ -174,7 +174,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
           ) : (
             <motion.div key="results" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
               <div className="flex items-center justify-between border-b border-white/5 px-3 py-2">
-                <h3 className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                <h3 className="text-[10px] font-medium tracking-widest text-slate-500">
                   3 · Impact
                 </h3>
                 <span className="text-[10px] text-slate-500">
@@ -191,7 +191,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
                     key={result.route_id}
                     className="flex items-center gap-3 border-b border-white/5 px-3 py-2.5"
                   >
-                    <span className="w-10 shrink-0 font-mono text-xs font-semibold text-slate-200">
+                    <span className="w-10 shrink-0 font-mono text-xs font-medium text-slate-200">
                       {result.route_id}
                     </span>
 
@@ -200,7 +200,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
                         <span className="font-mono">{result.baseline_min.toFixed(0)}m</span>
                         <span className="text-slate-600">→</span>
                         <span
-                          className={`font-mono font-semibold ${
+                          className={`font-mono font-medium ${
                             result.delta_min > 0 ? 'text-amber-300' : 'text-slate-300'
                           }`}
                         >
@@ -225,7 +225,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
 
                     <span className="text-right">
                       <span
-                        className={`block font-mono text-sm font-semibold ${
+                        className={`block font-mono text-sm font-medium ${
                           result.delta_min === 0
                             ? 'text-slate-500'
                             : result.recommended
@@ -236,7 +236,7 @@ export function WhatIfPanel({ roads, selected, onSelect }: PanelProps) {
                         {result.delta_min === 0 ? '—' : signedMinutes(result.delta_min)}
                       </span>
                       <span
-                        className={`flex items-center justify-end gap-1 text-[9px] uppercase ${
+                        className={`flex items-center justify-end gap-1 text-[9px] ${
                           result.recommended ? 'text-emerald-400' : 'text-red-400'
                         }`}
                       >

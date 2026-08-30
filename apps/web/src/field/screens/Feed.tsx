@@ -1,8 +1,9 @@
 /** Everything the fleet has found, newest first. Owned by M6. */
 
-import { AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Radio, RefreshCw } from 'lucide-react';
 import { useField } from '../store';
 import { SEVERITY_COLOR, STATUS_LABEL, slaText, timeAgo } from '../lib/api';
+import { EmptyState, ErrorNote, SkeletonRows } from '../../components/ui';
 
 export function Feed() {
   const events = useField((s) => s.events);
@@ -15,7 +16,7 @@ export function Feed() {
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center justify-between border-b border-white/5 px-4 py-3">
         <div>
-          <h1 className="text-base font-bold tracking-tight">Field Reports</h1>
+          <h1 className="text-base font-medium tracking-tight">Field Reports</h1>
           <p className="text-[11px] text-slate-500">{events.length} open across your zone</p>
         </div>
         <button
@@ -30,22 +31,32 @@ export function Feed() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && (
-          <div className="m-4 rounded-lg border border-amber-500/30 bg-amber-950/40 p-3 text-xs text-amber-200">
-            Cannot reach the API — {error}
+          <div className="m-4">
+            <ErrorNote>Cannot reach the API — {error}</ErrorNote>
             <button
               type="button"
               onClick={() => void load()}
-              className="mt-2 block w-full rounded-md bg-amber-500/20 py-2 text-amber-100"
+              className="mt-2 block w-full rounded-md bg-amber-500/20 py-2.5 text-[13px] text-amber-100 active:bg-amber-500/30"
             >
               Retry
             </button>
           </div>
         )}
 
-        {!error && events.length === 0 && !loading && (
-          <p className="px-6 py-12 text-center text-sm text-slate-500">
-            Nothing reported yet. Pull to refresh once the fleet is running.
-          </p>
+        {loading && events.length === 0 && <SkeletonRows rows={5} />}
+
+        {/* never a blank screen: an API that is down still gets an explanation
+            and something to do about it */}
+        {!loading && events.length === 0 && (
+          <EmptyState
+            icon={<Radio size={22} />}
+            title={error ? 'No reports to show' : 'Nothing reported yet'}
+            body={
+              error
+                ? 'The phone is working — it just cannot reach the platform. Reports will appear here as soon as it can.'
+                : 'Defects appear here as buses drive past them. Start the fleet with make dev.'
+            }
+          />
         )}
 
         {events.map((event) => {

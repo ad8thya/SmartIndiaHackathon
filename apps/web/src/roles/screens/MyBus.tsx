@@ -19,7 +19,7 @@ export function MyBus() {
   return (
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-line px-4 py-3 lg:px-6">
-        <h1 className="text-base font-bold tracking-tight text-ink">My Bus</h1>
+        <h1 className="text-base font-medium tracking-tight text-ink">My Bus</h1>
         <p className="text-[11px] text-muted">{buses.length} buses on the fleet</p>
       </header>
 
@@ -44,32 +44,32 @@ export function MyBus() {
         {bus && (
           <div className="space-y-3">
             <div className="rounded-2xl border border-line bg-surface2 p-4">
-              <p className="text-[10px] uppercase tracking-wider text-muted">Bus</p>
-              <p className="text-lg font-semibold text-ink">{bus.bus_id}</p>
+              <p className="text-[10px] tracking-wider text-muted">Bus</p>
+              <p className="text-lg font-medium text-ink">{bus.bus_id}</p>
               <p className="text-[12px] text-muted">Route {bus.route_id}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
               <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-                <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted">
+                <p className="flex items-center gap-1 text-[10px] tracking-wider text-muted">
                   <Gauge size={11} /> Speed
                 </p>
                 <p className="mt-1 font-mono text-sm text-ink">{bus.speed_kmph.toFixed(0)} km/h</p>
               </div>
               <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-                <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted">
+                <p className="flex items-center gap-1 text-[10px] tracking-wider text-muted">
                   <Users size={11} /> Occupancy
                 </p>
                 <p className="mt-1 font-mono text-sm text-ink">{bus.occupancy_pct.toFixed(0)}%</p>
               </div>
               <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-                <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted">
+                <p className="flex items-center gap-1 text-[10px] tracking-wider text-muted">
                   <MapPin size={11} /> Next stop
                 </p>
                 <p className="mt-1 truncate text-sm text-ink">{bus.next_stop ?? '—'}</p>
               </div>
               <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-                <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted">
+                <p className="flex items-center gap-1 text-[10px] tracking-wider text-muted">
                   <Navigation2 size={11} /> Delay
                 </p>
                 <p className="mt-1 font-mono text-sm text-ink">

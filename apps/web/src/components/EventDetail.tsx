@@ -41,7 +41,7 @@ export function EventDetail() {
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h2 className="text-sm font-semibold text-slate-100">
+              <h2 className="text-sm font-medium text-slate-100">
                 {CLASS_LABEL[event.detection_class]}
               </h2>
               <p className="mt-0.5 flex items-center gap-1 font-mono text-[10px] text-slate-500">
@@ -108,7 +108,7 @@ export function EventDetail() {
                   const select = document.getElementById('team-select') as HTMLSelectElement | null;
                   void advanceStatus(event.event_id, next, select?.value);
                 }}
-                className="flex items-center gap-1.5 rounded-md bg-sky-500 px-3 py-1.5 text-[11px] font-semibold text-ink-900 hover:bg-sky-400"
+                className="flex items-center gap-1.5 rounded-md bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-ink-900 hover:bg-sky-400"
               >
                 {STATUS_LABEL[next]} <ArrowRight size={12} />
               </button>
@@ -139,7 +139,7 @@ function Fact({
 }) {
   return (
     <div className="rounded border border-white/5 bg-ink-900/60 px-2 py-1.5">
-      <dt className="flex items-center gap-1 uppercase tracking-wider text-slate-500">
+      <dt className="flex items-center gap-1 tracking-wider text-slate-500">
         {icon} {label}
       </dt>
       <dd className="mt-0.5 font-mono text-xs text-slate-200">{value}</dd>

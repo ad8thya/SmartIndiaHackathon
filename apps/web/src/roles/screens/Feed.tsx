@@ -19,7 +19,7 @@ export function Feed() {
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3 lg:px-6">
         <div>
-          <h1 className="text-base font-bold tracking-tight text-ink">{tabLabel}</h1>
+          <h1 className="text-base font-medium tracking-tight text-ink">{tabLabel}</h1>
           <p className="text-[11px] text-muted">{events.length} open</p>
         </div>
         <button

@@ -124,7 +124,7 @@ export function MapScreen() {
       {!publicView && (
       <div className="shrink-0 border-t border-line lg:w-72 lg:border-l lg:border-t-0">
         <div className="border-b border-line px-4 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+          <p className="text-[11px] font-medium tracking-wider text-muted">
             Roads · scroll sideways for all columns
           </p>
         </div>
@@ -148,21 +148,21 @@ export function MapScreen() {
 
         {selectedRoad && (
           <div className="border-t border-line p-4">
-            <p className="text-[10px] uppercase tracking-wider text-muted">Selected road</p>
-            <h2 className="mt-0.5 truncate text-sm font-semibold text-ink">{selectedRoad.name}</h2>
+            <p className="text-[10px] tracking-wider text-muted">Selected road</p>
+            <h2 className="mt-0.5 truncate text-sm font-medium text-ink">{selectedRoad.name}</h2>
             <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
               <div className="rounded-lg bg-surface2 px-2.5 py-2">
                 <p className="text-muted">Congestion</p>
-                <p className="font-mono font-semibold text-ink">{selectedRoad.congestion_pct.toFixed(0)}%</p>
+                <p className="font-mono font-medium text-ink">{selectedRoad.congestion_pct.toFixed(0)}%</p>
               </div>
               <div className="rounded-lg bg-surface2 px-2.5 py-2">
                 <p className="text-muted">Avg speed</p>
-                <p className="font-mono font-semibold text-ink">{selectedRoad.avg_speed_kmph.toFixed(0)} km/h</p>
+                <p className="font-mono font-medium text-ink">{selectedRoad.avg_speed_kmph.toFixed(0)} km/h</p>
               </div>
               {selectedRoad.risk_band && (
                 <div className={`col-span-2 rounded-lg border px-2.5 py-2 ${RISK_BAND_COLOR[selectedRoad.risk_band]}`}>
                   <p className="opacity-70">Risk band</p>
-                  <p className="font-semibold">{selectedRoad.risk_band}</p>
+                  <p className="font-medium">{selectedRoad.risk_band}</p>
                 </div>
               )}
             </div>

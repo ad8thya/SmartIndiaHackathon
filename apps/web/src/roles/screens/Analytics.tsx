@@ -11,8 +11,8 @@ import { RISK_BAND_COLOR, timeAgo, titleCase } from '../lib/api';
 function Kpi({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl border border-line bg-surface2 px-3.5 py-3">
-      <p className="text-[10px] uppercase tracking-wider text-muted">{label}</p>
-      <p className="mt-1 font-mono text-lg font-semibold text-ink">{value}</p>
+      <p className="text-[10px] tracking-wider text-muted">{label}</p>
+      <p className="mt-1 font-mono text-lg font-medium text-ink">{value}</p>
     </div>
   );
 }
@@ -46,7 +46,7 @@ export function Analytics() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-bold tracking-tight text-ink">Analytics</h1>
+            <h1 className="text-base font-medium tracking-tight text-ink">Analytics</h1>
             <span className="rounded-full border border-line bg-surface2 px-2 py-0.5 text-[10px] font-medium text-muted">
               {ROLES[role].permissions.analyticsLabel}
             </span>
@@ -91,7 +91,7 @@ export function Analytics() {
 
           {level === 'full' && (
             <>
-              <h2 className="mb-2 mt-6 text-sm font-semibold text-ink">
+              <h2 className="mb-2 mt-6 text-sm font-medium text-ink">
                 Infrastructure recommendations
               </h2>
               {recommendations.length === 0 ? (
@@ -112,7 +112,7 @@ export function Analytics() {
                 </div>
               )}
 
-              <h2 className="mb-2 mt-6 text-sm font-semibold text-ink">Most dangerous junctions</h2>
+              <h2 className="mb-2 mt-6 text-sm font-medium text-ink">Most dangerous junctions</h2>
               <div className="space-y-2">
                 {junctions.map((j) => (
                   <div key={j.road_id} className="flex items-center justify-between rounded-xl border border-line bg-surface2 px-3 py-2.5">
@@ -128,7 +128,7 @@ export function Analytics() {
 
           {level === 'traffic' && (
             <>
-              <h2 className="mb-2 mt-6 text-sm font-semibold text-ink">Congested roads</h2>
+              <h2 className="mb-2 mt-6 text-sm font-medium text-ink">Congested roads</h2>
               <div className="space-y-2">
                 {[...roads]
                   .sort((a, b) => b.congestion_pct - a.congestion_pct)

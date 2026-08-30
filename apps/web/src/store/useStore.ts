@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import { api } from '../lib/api';
 import { LiveSocket, type ConnectionState } from '../lib/ws';
 import { getScope, resolveRole, type RoleId } from '../lib/roleScope';
+import { ESCALATION_RUNGS } from '../lib/tokens';
 import type {
   AnalyticsSummary,
   BusPosition,
@@ -44,6 +45,26 @@ const EMPTY_FILTERS: Filters = {
   search: '',
 };
 
+/**
+ * One rung climbed on the fusion ladder — the moment a defect goes from a
+ * single bus's guess to something the city owns.
+ *
+ * Note what is deliberately *not* here: which bus corroborated it. `Event`
+ * carries `distinct_bus_count`, not the ids behind it, and the WebSocket
+ * payload is a plain `Event` — so naming a specific bus would mean inventing
+ * one. The toast states the count, which is true.
+ */
+export interface Escalation {
+  eventId: string;
+  from: WorkflowStatus;
+  to: WorkflowStatus;
+  busCount: number;
+  detectionClass: DetectionClass;
+  roadSegmentId: string | null;
+  /** epoch ms, so the map can fade the pulse out on a wall clock */
+  at: number;
+}
+
 export interface TickerEntry {
   id: string;
   kind: 'event' | 'incident' | 'status';
@@ -62,6 +83,8 @@ interface Store {
   summary: AnalyticsSummary | null;
   whatIf: WhatIfResult[];
   ticker: TickerEntry[];
+  /** most recent ladder climbs, newest first — see Escalation */
+  escalations: Escalation[];
 
   // ── AI intelligence layer ─────────────────────────────────────────────────
   dangerousJunctions: DangerousJunction[];
@@ -107,6 +130,8 @@ interface Store {
   setPanel: (panel: string) => void;
   setFilters: (patch: Partial<Filters>) => void;
   resetFilters: () => void;
+  /** drop an escalation once its pulse and toast have run their course */
+  dismissEscalation: (eventId: string) => void;
   toggleHeatmap: () => void;
   toggleBuildings: () => void;
   togglePhone: () => void;
@@ -142,6 +167,7 @@ export const useStore = create<Store>((set, get) => ({
   summary: null,
   whatIf: [],
   ticker: [],
+  escalations: [],
 
   dangerousJunctions: [],
   recommendations: [],
@@ -224,8 +250,37 @@ export const useStore = create<Store>((set, get) => ({
           case 'EVENT_NEW':
           case 'EVENT_UPDATED': {
             const event = message.payload as unknown as UTEvent;
+            const previous = state.events[event.event_id];
+
+            // ── the centrepiece ────────────────────────────────────────────
+            // An event climbing the fusion ladder is the whole thesis of the
+            // project: more buses seeing the same defect turns a guess into a
+            // work order. When it happens we record it so the map can pulse
+            // the pin and a toast can say what changed — otherwise the single
+            // most important moment in the demo is a pin quietly changing hue.
+            const climbed =
+              previous !== undefined &&
+              previous.status !== event.status &&
+              ESCALATION_RUNGS.indexOf(event.status) > ESCALATION_RUNGS.indexOf(previous.status) &&
+              ESCALATION_RUNGS.includes(event.status);
+
+            const escalation: Escalation | null = climbed
+              ? {
+                  eventId: event.event_id,
+                  from: previous.status,
+                  to: event.status,
+                  busCount: event.distinct_bus_count,
+                  detectionClass: event.detection_class,
+                  roadSegmentId: event.road_segment_id,
+                  at: Date.now(),
+                }
+              : null;
+
             set({
               events: { ...get().events, [event.event_id]: event },
+              escalations: escalation
+                ? [escalation, ...get().escalations].slice(0, 12)
+                : get().escalations,
               ticker: pushTicker(get().ticker, {
                 id: `${event.event_id}-${event.status}-${message.ts}`,
                 kind: message.type === 'EVENT_NEW' ? 'event' : 'status',
@@ -345,6 +400,8 @@ export const useStore = create<Store>((set, get) => ({
   setPanel: (activePanel) => set({ activePanel }),
   setFilters: (patch) => set({ filters: { ...get().filters, ...patch } }),
   resetFilters: () => set({ filters: EMPTY_FILTERS }),
+  dismissEscalation: (eventId) =>
+    set({ escalations: get().escalations.filter((item) => item.eventId !== eventId) }),
   toggleHeatmap: () => set({ showHeatmap: !get().showHeatmap }),
   toggleBuildings: () => set({ showBuildings: !get().showBuildings }),
   togglePhone: () => set({ showPhone: !get().showPhone }),

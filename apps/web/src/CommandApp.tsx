@@ -24,7 +24,9 @@ import { EventTicker } from './components/EventTicker';
 import { Sidebar } from './components/Sidebar';
 import { PhoneFrame } from './components/PhoneFrame';
 import { EventDetail } from './components/EventDetail';
+import { EscalationToasts } from './components/EscalationToasts';
 import { useStore } from './store/useStore';
+import { Skeleton } from './components/ui';
 
 export default function App({ role, screen }: { role: string | null; screen?: string | null }) {
   const bootstrap = useStore((s) => s.bootstrap);
@@ -59,13 +61,15 @@ export default function App({ role, screen }: { role: string | null; screen?: st
         <section className="relative min-w-0 flex-1">
           <MapCanvas />
           <EventDetail />
+          <EscalationToasts />
           <PhoneFrame />
 
           {loading && (
             <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-ink-900/70 backdrop-blur-sm">
-              <div className="text-center">
-                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-sky-500/30 border-t-sky-400" />
-                <p className="mt-3 text-xs text-slate-400">Loading the twin…</p>
+              <div className="w-56 text-center">
+                <Skeleton className="mx-auto h-2 w-40" />
+                <Skeleton className="mx-auto mt-2 h-2 w-24" />
+                <p className="mt-4 text-[11px] text-slate-400">Loading the twin…</p>
               </div>
             </div>
           )}

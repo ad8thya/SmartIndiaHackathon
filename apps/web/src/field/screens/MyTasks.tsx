@@ -14,7 +14,7 @@ export function MyTasks() {
   return (
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-white/5 px-4 py-3">
-        <h1 className="text-base font-bold tracking-tight">My Tasks</h1>
+        <h1 className="text-base font-medium tracking-tight">My Tasks</h1>
         <p className="text-[11px] text-slate-500">
           {MY_TEAM} · {tasks.length} assigned
           {overdue > 0 && <span className="text-red-400"> · {overdue} overdue</span>}
@@ -71,7 +71,7 @@ export function MyTasks() {
                   <button
                     type="button"
                     onClick={() => void advance(task.event_id, 'REPAIR_COMPLETED')}
-                    className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-ink-900 active:opacity-80"
+                    className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-medium text-ink-900 active:opacity-80"
                   >
                     <CheckCircle2 size={16} /> Mark repaired
                   </button>

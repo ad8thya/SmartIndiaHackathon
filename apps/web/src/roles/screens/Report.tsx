@@ -18,7 +18,7 @@ export function Report() {
 
   return (
     <div className="mx-auto min-h-0 w-full max-w-md flex-1 overflow-y-auto p-4 lg:p-6">
-      <h1 className="text-base font-bold tracking-tight text-ink">Report something</h1>
+      <h1 className="text-base font-medium tracking-tight text-ink">Report something</h1>
       <p className="mt-1 text-[12px] text-muted">
         A pothole, a broken signal, anything on your street.
       </p>
@@ -41,14 +41,14 @@ export function Report() {
           submitReport(text.trim());
           setText('');
         }}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-sm font-semibold text-white disabled:opacity-40"
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-sm font-medium text-white disabled:opacity-40"
       >
         <MessageSquarePlus size={16} /> Submit report
       </button>
 
       {reports.length > 0 && (
         <>
-          <h2 className="mb-2 mt-6 text-[12px] font-semibold uppercase tracking-wider text-muted">
+          <h2 className="mb-2 mt-6 text-[12px] font-medium tracking-wider text-muted">
             Your reports
           </h2>
           <div className="space-y-2">

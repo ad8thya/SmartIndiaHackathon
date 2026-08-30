@@ -34,7 +34,7 @@ export function RoleSheet() {
             className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-[420px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-3xl"
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-ink">Switch role</h2>
+              <h2 className="text-sm font-medium text-ink">Switch role</h2>
               <button
                 type="button"
                 onClick={closeRoleSheet}

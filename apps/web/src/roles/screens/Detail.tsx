@@ -51,7 +51,7 @@ const ACTIONS: Array<{ status: WorkflowStatus; label: string; tone: string; icon
 function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-      <dt className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted">
+      <dt className="flex items-center gap-1 text-[10px] tracking-wider text-muted">
         {icon} {label}
       </dt>
       <dd className="mt-1 truncate font-mono text-xs text-ink">{value}</dd>
@@ -87,7 +87,7 @@ export function Detail() {
           >
             <ArrowLeft size={18} />
           </button>
-          <h1 className="truncate text-sm font-semibold text-ink">
+          <h1 className="truncate text-sm font-medium text-ink">
             {titleCase(incident.incident_class)}
           </h1>
         </header>
@@ -144,7 +144,7 @@ export function Detail() {
         >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="truncate text-sm font-semibold text-ink">{titleCase(event.detection_class)}</h1>
+        <h1 className="truncate text-sm font-medium text-ink">{titleCase(event.detection_class)}</h1>
       </header>
 
       <div className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto pb-4">
@@ -252,7 +252,7 @@ export function Detail() {
                       setNotes('');
                       closeDetail();
                     }}
-                    className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold ${action.tone}`}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-medium ${action.tone}`}
                   >
                     {action.icon} {action.label}
                   </button>

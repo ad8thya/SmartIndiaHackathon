@@ -48,7 +48,7 @@ export function StatusLadder({ status }: { status: WorkflowStatus }) {
           <X size={13} />
         </span>
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted">Status ladder</p>
+          <p className="text-[10px] tracking-wider text-muted">Status ladder</p>
           <p className="text-[12px] font-medium text-ink line-through decoration-red-400">
             Workflow closed — rejected, not a defect
           </p>
@@ -61,7 +61,7 @@ export function StatusLadder({ status }: { status: WorkflowStatus }) {
 
   return (
     <div className="rounded-xl border border-line bg-surface2 px-3 py-2.5">
-      <p className="mb-2 text-[10px] uppercase tracking-wider text-muted">Status ladder</p>
+      <p className="mb-2 text-[10px] tracking-wider text-muted">Status ladder</p>
       <div className="flex items-center">
         {LADDER.map((step, i) => (
           <div key={step} className="flex flex-1 items-center last:flex-none">

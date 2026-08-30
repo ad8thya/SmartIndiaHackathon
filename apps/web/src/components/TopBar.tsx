@@ -19,33 +19,10 @@ import {
 import { useStore } from '../store/useStore';
 import { getScope } from '../lib/roleScope';
 import { compact } from '../lib/format';
+import { KpiStrip, type Kpi } from './ui/KpiStrip';
 
 /** The role picker is the landing route of this same app now. */
 const ALL_ROLES_URL = '/';
-
-function Kpi({
-  icon,
-  label,
-  value,
-  tone = 'default',
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone?: 'default' | 'warn' | 'good';
-}) {
-  const toneClass =
-    tone === 'warn' ? 'text-amber-300' : tone === 'good' ? 'text-emerald-300' : 'text-sky-300';
-  return (
-    <div className="flex items-center gap-2.5 border-r border-white/5 px-4 last:border-none">
-      <span className={toneClass}>{icon}</span>
-      <div className="leading-tight">
-        <div className="font-mono text-sm font-semibold text-slate-100">{value}</div>
-        <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
-      </div>
-    </div>
-  );
-}
 
 export function TopBar() {
   const summary = useStore((s) => s.summary);
@@ -66,6 +43,48 @@ export function TopBar() {
   const scopeOverridden = useStore((s) => s.scopeOverridden);
   const overrideScope = useStore((s) => s.overrideScope);
   const scope = scopeOverridden ? null : getScope(role);
+  const loading = useStore((s) => s.loading);
+
+  // one definition of every KPI; a scope picks a subset by key, and a null
+  // scope (no role, or the viewer cleared it) shows all of them
+  const allKpis: Kpi[] = [
+    {
+      key: 'buses',
+      icon: <Bus size={16} />,
+      label: 'Buses online',
+      value: buses.length || summary?.buses_online || 0,
+    },
+    {
+      key: 'km',
+      icon: <Activity size={16} />,
+      label: 'km surveyed',
+      value: summary?.km_surveyed_today ?? 0,
+      text: summary ? compact(summary.km_surveyed_today) : undefined,
+    },
+    {
+      key: 'events',
+      icon: <Flame size={16} />,
+      label: 'Open events',
+      value: summary?.open_events ?? 0,
+      tone: 'warn',
+    },
+    {
+      key: 'speed',
+      icon: <Timer size={16} />,
+      label: 'Avg speed',
+      value: summary?.avg_network_speed_kmph ?? 0,
+      decimals: 1,
+      suffix: ' km/h',
+    },
+    {
+      key: 'sla',
+      icon: <AlertOctagon size={16} />,
+      label: 'SLA breaches',
+      value: summary?.sla_breaches ?? 0,
+      tone: summary?.sla_breaches ? 'warn' : 'good',
+    },
+  ];
+  const kpis = scope ? allKpis.filter((item) => scope.kpis.includes(item.key as never)) : allKpis;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -90,8 +109,8 @@ export function TopBar() {
           <RouteIcon size={17} />
         </div>
         <div className="leading-tight">
-          <div className="text-sm font-bold tracking-tight text-slate-100">URBAN TWIN</div>
-          <div className="text-[10px] uppercase tracking-widest text-slate-500">
+          <div className="text-sm font-medium tracking-tight text-slate-100">URBAN TWIN</div>
+          <div className="text-[10px] tracking-widest text-slate-500">
             Chennai · Command Centre
           </div>
         </div>
@@ -124,27 +143,7 @@ export function TopBar() {
         </a>
       </div>
 
-      <div className="flex flex-1 items-center overflow-x-auto">
-        <Kpi icon={<Bus size={16} />} label="Buses online" value={String(buses.length || summary?.buses_online || 0)} />
-        <Kpi icon={<Activity size={16} />} label="km surveyed" value={compact(summary?.km_surveyed_today ?? 0)} />
-        <Kpi
-          icon={<Flame size={16} />}
-          label="Open events"
-          value={String(summary?.open_events ?? 0)}
-          tone="warn"
-        />
-        <Kpi
-          icon={<Timer size={16} />}
-          label="Avg speed"
-          value={`${summary?.avg_network_speed_kmph?.toFixed(1) ?? '—'} km/h`}
-        />
-        <Kpi
-          icon={<AlertOctagon size={16} />}
-          label="SLA breaches"
-          value={String(summary?.sla_breaches ?? 0)}
-          tone={summary?.sla_breaches ? 'warn' : 'good'}
-        />
-      </div>
+      <KpiStrip items={kpis} loading={loading && !summary} />
 
       <div className="flex items-center gap-1.5 pr-3">
         <ToggleButton active={showBuildings} onClick={toggleBuildings} title="3D buildings">
@@ -167,7 +166,7 @@ export function TopBar() {
             transition={{ repeat: Infinity, duration: 2.2 }}
           />
           <Radio size={12} className="text-slate-500" />
-          <span className="text-[10px] uppercase tracking-wider text-slate-400">{connection}</span>
+          <span className="text-[10px] tracking-wider text-slate-400">{connection}</span>
         </div>
       </div>
     </header>

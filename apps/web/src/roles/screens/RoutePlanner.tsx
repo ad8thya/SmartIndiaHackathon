@@ -42,12 +42,12 @@ export function RoutePlanner() {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-y-auto p-4 lg:p-6">
-      <h1 className="text-base font-bold tracking-tight text-ink">Plan a safe route</h1>
+      <h1 className="text-base font-medium tracking-tight text-ink">Plan a safe route</h1>
       <p className="mt-1 text-[12px] text-muted">
         Close a corridor and the twin re-routes every bus service to show what it costs.
       </p>
 
-      <h2 className="mb-1.5 mt-5 text-[10px] font-semibold uppercase tracking-widest text-muted">
+      <h2 className="mb-1.5 mt-5 text-[10px] font-medium tracking-widest text-muted">
         1 · Choose roads to close (up to {MAX_CLOSED_ROADS})
       </h2>
       <div className="max-h-56 overflow-y-auto rounded-xl border border-line">
@@ -77,7 +77,7 @@ export function RoutePlanner() {
         })}
       </div>
 
-      <h2 className="mb-2 mt-5 text-[10px] font-semibold uppercase tracking-widest text-muted">
+      <h2 className="mb-2 mt-5 text-[10px] font-medium tracking-widest text-muted">
         2 · Reason
       </h2>
       <div className="flex flex-wrap gap-1.5">
@@ -100,7 +100,7 @@ export function RoutePlanner() {
           type="button"
           onClick={() => void runWhatIf(closed, reason)}
           disabled={closed.length === 0 || simulating}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-[13px] font-semibold text-white disabled:opacity-40"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-3 text-[13px] font-medium text-white disabled:opacity-40"
         >
           <Play size={14} />
           {simulating ? 'Simulating…' : `Close ${closed.length || 0} road${closed.length === 1 ? '' : 's'}`}
@@ -115,7 +115,7 @@ export function RoutePlanner() {
         </button>
       </div>
 
-      <h2 className="mb-2 mt-6 text-[10px] font-semibold uppercase tracking-widest text-muted">
+      <h2 className="mb-2 mt-6 text-[10px] font-medium tracking-widest text-muted">
         3 · Simulated route impact
       </h2>
       {results.length === 0 ? (
@@ -135,14 +135,14 @@ export function RoutePlanner() {
               .sort((a, b) => b.delta_min - a.delta_min)
               .map((result) => (
                 <div key={result.route_id} className="flex items-center gap-3 rounded-xl border border-line bg-surface2 px-3 py-2.5">
-                  <span className="w-12 shrink-0 font-mono text-[12px] font-semibold text-ink">
+                  <span className="w-12 shrink-0 font-mono text-[12px] font-medium text-ink">
                     {result.route_id}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 text-[11px] text-ink/70">
                       <span className="font-mono">{result.baseline_min.toFixed(0)}m</span>
                       <span className="text-muted">→</span>
-                      <span className="font-mono font-semibold text-ink">{result.simulated_min.toFixed(0)}m</span>
+                      <span className="font-mono font-medium text-ink">{result.simulated_min.toFixed(0)}m</span>
                     </span>
                     {result.affected_passengers > 0 && (
                       <span className="mt-1 flex items-center gap-1 text-[10px] text-muted">
@@ -152,14 +152,14 @@ export function RoutePlanner() {
                   </span>
                   <span className="text-right">
                     <span
-                      className={`block font-mono text-sm font-semibold ${
+                      className={`block font-mono text-sm font-medium ${
                         result.delta_min === 0 ? 'text-muted' : result.recommended ? 'text-amber-700' : 'text-red-600'
                       }`}
                     >
                       {result.delta_min === 0 ? '—' : `+${result.delta_min.toFixed(0)}m`}
                     </span>
                     <span
-                      className={`flex items-center justify-end gap-1 text-[9px] uppercase ${
+                      className={`flex items-center justify-end gap-1 text-[9px] ${
                         result.recommended ? 'text-emerald-700' : 'text-red-600'
                       }`}
                     >

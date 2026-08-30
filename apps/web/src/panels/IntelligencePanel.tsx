@@ -60,7 +60,7 @@ export function IntelligencePanel({ selected, onSelect }: PanelProps) {
     <div className="flex h-full flex-col overflow-y-auto">
       {/* ── urban risk index ─────────────────────────────────────────── */}
       <div className="border-b border-white/5 p-3">
-        <h3 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="flex items-center gap-1.5 text-[10px] font-medium tracking-widest text-slate-500">
           <Gauge size={12} /> Urban risk index — top {dangerousJunctions.length || 10}
         </h3>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
@@ -108,11 +108,11 @@ export function IntelligencePanel({ selected, onSelect }: PanelProps) {
                     </span>
                   </span>
                   <span className="text-right">
-                    <span className="block font-mono text-sm font-semibold text-slate-100">
+                    <span className="block font-mono text-sm font-medium text-slate-100">
                       {junction.risk_score.toFixed(0)}
                     </span>
                     <span
-                      className={`rounded border px-1.5 py-0.5 text-[9px] uppercase ${riskBandChipClass(junction.risk_band)}`}
+                      className={`rounded border px-1.5 py-0.5 text-[9px] ${riskBandChipClass(junction.risk_band)}`}
                     >
                       {junction.risk_band}
                     </span>
@@ -151,7 +151,7 @@ export function IntelligencePanel({ selected, onSelect }: PanelProps) {
 
       {/* ── recommendations ──────────────────────────────────────────── */}
       <div className="border-b border-white/5 p-3">
-        <h3 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="flex items-center gap-1.5 text-[10px] font-medium tracking-widest text-slate-500">
           <Wrench size={12} /> Recommendations ({recommendations.length})
         </h3>
       </div>
@@ -164,7 +164,7 @@ export function IntelligencePanel({ selected, onSelect }: PanelProps) {
                   {rec.rec_type.replace(/_/g, ' ').toLowerCase()}
                 </span>
                 <span
-                  className={`rounded border px-1.5 py-0.5 text-[9px] uppercase ${riskBandChipClass(rec.priority)}`}
+                  className={`rounded border px-1.5 py-0.5 text-[9px] ${riskBandChipClass(rec.priority)}`}
                 >
                   {rec.priority}
                 </span>
@@ -199,7 +199,7 @@ export function IntelligencePanel({ selected, onSelect }: PanelProps) {
 
       {/* ── near-misses ───────────────────────────────────────────────── */}
       <div className="p-3">
-        <h3 className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+        <h3 className="flex items-center gap-1.5 text-[10px] font-medium tracking-widest text-slate-500">
           <Zap size={12} /> Near-misses ({nearMisses.length})
         </h3>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
@@ -223,7 +223,7 @@ export function IntelligencePanel({ selected, onSelect }: PanelProps) {
                     {nm.bus_id} · {nm.closing_speed_kmph.toFixed(0)} km/h · {timeAgo(nm.ts)}
                   </span>
                 </span>
-                <span className="rounded border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] uppercase text-amber-300">
+                <span className="rounded border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-300">
                   {CLASS_LABEL.NEAR_MISS}
                 </span>
               </div>

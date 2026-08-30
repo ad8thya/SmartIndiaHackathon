@@ -1,60 +1,24 @@
 /**
- * One colour vocabulary for the whole command centre. Owned by M6.
+ * Colour helpers. Owned by M6.
  *
- * Five people build panels; without this file the same status would be three
- * different ambers and the map would disagree with the sidebar.
+ * The vocabulary itself lives in `tokens.ts` — this file only turns it into
+ * the shapes consumers need: deck.gl RGBA tuples and tailwind class strings.
+ * Re-exported here so the panels that already import from `colors` keep
+ * working; new code can import either.
  */
 
+import {
+  RISK_BAND_HEX,
+  RISK_HEX,
+  SEVERITY_HEX,
+  STATUS_HEX,
+  STATUS_LABEL,
+} from './tokens';
 import type { DetectionClass, RiskBand, RiskLevel, Severity, WorkflowStatus } from './types';
 
+export { RISK_BAND_HEX, RISK_HEX, SEVERITY_HEX, STATUS_HEX, STATUS_LABEL };
+
 export type RGBA = [number, number, number, number];
-
-/** grey → amber → green, the story an operator reads at a glance. */
-export const STATUS_HEX: Record<WorkflowStatus, string> = {
-  DETECTED: '#94a3b8',
-  AI_VERIFIED: '#facc15',
-  AUTHORITY_NOTIFIED: '#f59e0b',
-  INSPECTION: '#fb923c',
-  MAINTENANCE_ASSIGNED: '#f97316',
-  REPAIR_COMPLETED: '#4ade80',
-  VERIFIED: '#22c55e',
-  RESOLVED: '#16a34a',
-  REJECTED: '#64748b',
-};
-
-export const STATUS_LABEL: Record<WorkflowStatus, string> = {
-  DETECTED: 'Detected',
-  AI_VERIFIED: 'AI verified',
-  AUTHORITY_NOTIFIED: 'Authority notified',
-  INSPECTION: 'Inspection',
-  MAINTENANCE_ASSIGNED: 'Crew assigned',
-  REPAIR_COMPLETED: 'Repair complete',
-  VERIFIED: 'Verified',
-  RESOLVED: 'Resolved',
-  REJECTED: 'Rejected',
-};
-
-export const SEVERITY_HEX: Record<Severity, string> = {
-  SMALL: '#38bdf8',
-  MEDIUM: '#f59e0b',
-  LARGE: '#ef4444',
-};
-
-export const RISK_HEX: Record<RiskLevel, string> = {
-  LOW: '#22c55e',
-  MODERATE: '#facc15',
-  HIGH: '#f97316',
-  SEVERE: '#ef4444',
-};
-
-/** AI intelligence layer's own scale — distinct from RiskLevel above (M2's
- * traffic/PCI blend). Top band is CRITICAL, not SEVERE. */
-export const RISK_BAND_HEX: Record<RiskBand, string> = {
-  LOW: '#22c55e',
-  MODERATE: '#facc15',
-  HIGH: '#f97316',
-  CRITICAL: '#dc2626',
-};
 
 export const CLASS_LABEL: Record<DetectionClass, string> = {
   POTHOLE: 'Pothole',
@@ -104,7 +68,10 @@ export function congestionColor(pct: number, alpha = 200): RGBA {
 
 /** Tailwind class helpers, so panels do not hand-roll conditional strings. */
 export function statusChipClass(status: WorkflowStatus): string {
-  if (status === 'DETECTED' || status === 'REJECTED') return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+  if (status === 'DETECTED' || status === 'REJECTED')
+    return 'bg-slate-500/15 text-slate-300 border-slate-500/30';
+  if (status === 'AUTHORITY_NOTIFIED')
+    return 'bg-red-500/15 text-red-300 border-red-500/30';
   if (status === 'RESOLVED' || status === 'VERIFIED' || status === 'REPAIR_COMPLETED')
     return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
   return 'bg-amber-500/15 text-amber-300 border-amber-500/30';

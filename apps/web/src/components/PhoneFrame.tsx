@@ -32,7 +32,7 @@ export function PhoneFrame() {
       className="absolute bottom-6 right-6 z-40 flex flex-col items-center"
     >
       <div className="mb-2 flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-ink-800/95 px-2.5 py-1.5 backdrop-blur">
-        <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400">
+        <span className="flex items-center gap-1.5 text-[10px] tracking-wider text-slate-400">
           <Smartphone size={12} /> Field app
         </span>
         <span className="flex items-center gap-1">
