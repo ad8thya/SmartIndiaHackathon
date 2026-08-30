@@ -342,7 +342,7 @@ def check_api(report: Report) -> None:
 def check_frontend(report: Report) -> None:
     section("frontend")
     root = Path(__file__).resolve().parents[1]
-    for app_dir in ("apps/command", "apps/field", "apps/roles"):
+    for app_dir in ("apps/web",):
         installed = (root / app_dir / "node_modules").is_dir()
         report.add(
             f"{app_dir} dependencies installed",
@@ -350,7 +350,7 @@ def check_frontend(report: Report) -> None:
             "" if installed else "run `make setup`",
             required=False,
         )
-    buildings = root / "apps/command/public/data/buildings.geojson"
+    buildings = root / "apps/web/public/data/buildings.geojson"
     report.add(
         "3D building footprints cached",
         buildings.is_file(),

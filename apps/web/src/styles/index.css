@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overscroll-behavior: none;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    /* neutral ground: each route root paints its own theme (operator screens
+       dark, citizen/roles light) */
+    background: #080b14;
+    color: #e2e8f0;
+    /* respects a real phone's notch on /field and the citizen screens */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* thin dark scrollbars for the dense operator panels */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #243050;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2f3d63;
+  }
+
+  /* only the dark operator surfaces want dark-styled form controls */
+  .theme-dark select,
+  .theme-dark input {
+    color-scheme: dark;
+  }
+  .theme-light {
+    background: #efefec;
+    color: #1a1a18;
+  }
+  .theme-light ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* maplibre's own controls, restyled for the dark shell */
+.maplibregl-ctrl-attrib {
+  background: rgba(8, 11, 20, 0.7) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+}
+.maplibregl-canvas {
+  outline: none;
+}

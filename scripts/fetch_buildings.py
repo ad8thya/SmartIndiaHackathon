@@ -4,7 +4,7 @@
     make buildings
 
 Fetches once from Overpass and writes
-``apps/command/public/data/buildings.geojson``. The app loads that file and
+``apps/web/public/data/buildings.geojson``. The app loads that file and
 NEVER calls Overpass at runtime — it is rate-limited, slow, and it will pick
 your demo to fail on.
 
@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parents[1] / "apps/command/public/data/buildings.geojson"
+OUT = Path(__file__).resolve().parents[1] / "apps/web/public/data/buildings.geojson"
 OVERPASS = "https://overpass-api.de/api/interpreter"
 
 #: metres of padding around the seeded routes. Anything the buses never drive
