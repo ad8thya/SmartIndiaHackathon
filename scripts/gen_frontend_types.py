@@ -18,10 +18,9 @@ import typing
 import uuid
 from pathlib import Path
 
-from pydantic import BaseModel
-
 import contracts
 from contracts import enums as contract_enums
+from pydantic import BaseModel
 
 OUT = Path(__file__).resolve().parent.parent / "apps/web/src/lib/types.ts"
 
@@ -120,9 +119,7 @@ def emit_model(cls: type[BaseModel]) -> str:
 def class_list(name: str, values: typing.Iterable[enum.Enum]) -> str:
     ordered = [m.value for m in contract_enums.DetectionClass if m in set(values)]
     body = ",\n  ".join(f"'{v}'" for v in ordered)
-    return (
-        f"export const {name}: readonly DetectionClass[] = [\n  {body},\n] as const;\n"
-    )
+    return f"export const {name}: readonly DetectionClass[] = [\n  {body},\n] as const;\n"
 
 
 HAND_WRITTEN = """\
@@ -181,6 +178,58 @@ export interface PanelProps {
 """
 
 
+CITY_REF_OUT = OUT.parent / "cityRef.ts"
+
+
+def write_city_ref() -> None:
+    """Emit the handful of seeded-network facts the UI would otherwise hardcode.
+
+    `RiskPanel` used to say "3" school zones as a literal, which is wrong the
+    moment anyone adds a fourth to `citydata`. These are generated from the
+    same reference data the mocks and the seeder read.
+    """
+    import citydata
+
+    zones = ",\n  ".join(
+        f"{{ id: {z.zone_id!r}, name: {z.name!r}, lat: {z.center[1]}, lon: {z.center[0]},"
+        f" radiusM: {z.radius_m}, activeHours: {z.active_hours!r} }}".replace("'", '"')
+        for z in citydata.SCHOOL_ZONES
+    )
+    body = f"""\
+/**
+ * GENERATED from packages/citydata — do not edit by hand.
+ * Regenerate with:  .venv/bin/python scripts/gen_frontend_types.py
+ *
+ * Static facts about the seeded Chennai network. The UI reads counts from
+ * here instead of hardcoding them, so adding a school zone or a route in
+ * citydata updates every screen that mentions one.
+ */
+
+export interface SchoolZoneRef {{
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  radiusM: number;
+  activeHours: string;
+}}
+
+export const SCHOOL_ZONES: readonly SchoolZoneRef[] = [
+  {zones},
+] as const;
+
+export const SCHOOL_ZONE_COUNT = {len(citydata.SCHOOL_ZONES)};
+export const ROUTE_COUNT = {len(citydata.ROUTES)};
+export const SEGMENT_COUNT = {len(citydata.SEGMENTS)};
+export const BUS_COUNT = {len(citydata.BUSES)};
+export const DEFECT_HOTSPOT_COUNT = {len(citydata.DEFECT_HOTSPOTS)};
+/** the speed limit inside a school zone, km/h — M3's pedestrian mock uses it */
+export const SCHOOL_ZONE_SPEED_LIMIT_KMPH = 25;
+"""
+    CITY_REF_OUT.write_text(body)
+    print(f"wrote {CITY_REF_OUT.relative_to(Path.cwd())}")
+
+
 def main() -> None:
     parts = [
         "/**\n"
@@ -190,15 +239,14 @@ def main() -> None:
         " */\n",
     ]
     parts += [emit_enum(e) for e in ENUMS]
-    parts.append(
-        class_list("INFRASTRUCTURE_CLASSES", contract_enums.INFRASTRUCTURE_CLASSES)
-    )
+    parts.append(class_list("INFRASTRUCTURE_CLASSES", contract_enums.INFRASTRUCTURE_CLASSES))
     parts.append(class_list("FUSABLE_CLASSES", contract_enums.FUSABLE_CLASSES))
     parts.append(HAND_WRITTEN)
     parts += [emit_model(m) for m in MODELS]
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(parts))
     print(f"wrote {OUT.relative_to(Path.cwd())}")
+    write_city_ref()
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ import {
   statusChipClass,
 } from '../lib/colors';
 import { slaLabel, timeAgo } from '../lib/format';
+import { evidenceImage } from '../lib/evidence';
 
 const SEVERITIES: Severity[] = ['LARGE', 'MEDIUM', 'SMALL'];
 
@@ -200,15 +201,22 @@ function DefectRow({
 
       {active && event.evidence_uris.length > 0 && (
         <div className="mt-1 flex gap-1.5 pl-6">
-          {event.evidence_uris.slice(0, 4).map((uri) => (
-            <div
+          {event.evidence_uris.slice(0, 4).map((uri, index) => (
+            <img
               key={uri}
-              title={uri}
-              className="flex h-12 w-16 items-center justify-center rounded border border-white/10 bg-ink-900 text-[9px] text-slate-600"
-            >
-              {/* TODO (M1): swap for a real <img> once M5 exposes signed URLs */}
-              <Camera size={14} />
-            </div>
+              src={evidenceImage(
+                {
+                  id: `${event.event_id}-${index}`,
+                  detectionClass: event.detection_class,
+                  severity: event.severity,
+                  ts: event.first_seen,
+                },
+                true,
+              )}
+              alt={`Synthetic evidence crop for ${event.detection_class}`}
+              title={`${uri} — synthetic placeholder, no camera feed yet`}
+              className="h-12 w-16 rounded border border-white/10 object-cover"
+            />
           ))}
         </div>
       )}

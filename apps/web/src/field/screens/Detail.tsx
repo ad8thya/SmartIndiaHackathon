@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useField } from '../store';
 import { SEVERITY_COLOR, STATUS_LABEL, slaText, timeAgo, type WorkflowStatus } from '../lib/api';
+import { evidenceImage } from '../../lib/evidence';
 
 /** What a crew on site can actually say. Deliberately three big buttons. */
 const ACTIONS: Array<{ status: WorkflowStatus; label: string; tone: string; icon: React.ReactNode }> = [
@@ -77,15 +78,20 @@ export function Detail() {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-4">
         {/* evidence */}
-        <div className="flex h-44 items-center justify-center border-b border-white/5 bg-ink-800">
-          {/* TODO: real crops once the API exposes signed URLs */}
-          <div className="text-center text-slate-600">
-            <Camera size={28} className="mx-auto" />
-            <p className="mt-1.5 text-[11px]">
-              {event.evidence_uris.length} evidence frame
-              {event.evidence_uris.length === 1 ? '' : 's'}
-            </p>
-          </div>
+        <div className="relative border-b border-white/5 bg-ink-800">
+          <img
+            src={evidenceImage({
+              id: event.event_id,
+              detectionClass: event.detection_class,
+              severity: event.severity,
+              ts: event.first_seen,
+            })}
+            alt={`Synthetic evidence card for ${event.detection_class}`}
+            className="h-44 w-full object-cover"
+          />
+          <p className="absolute bottom-1.5 right-2 text-[9px] text-slate-500">
+            {event.evidence_uris.length} frame{event.evidence_uris.length === 1 ? '' : 's'} on file
+          </p>
         </div>
 
         <div className="space-y-3 p-4">

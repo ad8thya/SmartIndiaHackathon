@@ -23,7 +23,7 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import type { DetectionClass } from '../lib/api';
+import type { DetectionClass, WorkflowStatus } from '../lib/api';
 
 export type RoleId =
   | 'bus-driver'
@@ -66,8 +66,50 @@ export interface RoleConfig {
   tabs: Array<{ id: TabId; label: string }>;
   /** which detection classes this role's Feed/Map is scoped to; undefined = all */
   feedClasses?: DetectionClass[];
+  /**
+   * This role sees the *public* dataset only — confirmed, acted-on events with
+   * no operator internals attached. Set for `citizen`; see PUBLIC_STATUSES.
+   */
+  publicOnly?: boolean;
   homeTab: TabId;
 }
+
+/**
+ * What a member of the public is allowed to see on the map.
+ *
+ * The workflow ladder starts with machine output: DETECTED is one bus with low
+ * confidence, AI_VERIFIED is corroborated but nobody has looked at it yet.
+ * Publishing those would put unreviewed algorithmic accusations about specific
+ * streets in front of citizens, and REJECTED would publish the ones the city
+ * looked at and disagreed with. So the public map starts at
+ * AUTHORITY_NOTIFIED — the rung where a human has been told and the city owns
+ * the item — and runs to RESOLVED.
+ *
+ * The operator console is unaffected: it still shows all nine states. This is
+ * the one place the two datasets deliberately differ.
+ */
+export const PUBLIC_STATUSES: ReadonlySet<WorkflowStatus> = new Set<WorkflowStatus>([
+  'AUTHORITY_NOTIFIED',
+  'INSPECTION',
+  'MAINTENANCE_ASSIGNED',
+  'REPAIR_COMPLETED',
+  'VERIFIED',
+  'RESOLVED',
+]);
+
+/**
+ * Plain-language status for the public map. An operator reads
+ * "MAINTENANCE_ASSIGNED"; a citizen should read "being fixed" — and should
+ * never be shown a confidence score or which bus saw it.
+ */
+export const PUBLIC_STATUS_LABEL: Record<string, string> = {
+  AUTHORITY_NOTIFIED: 'Reported to the city',
+  INSPECTION: 'Being inspected',
+  MAINTENANCE_ASSIGNED: 'Repair scheduled',
+  REPAIR_COMPLETED: 'Repaired',
+  VERIFIED: 'Repair verified',
+  RESOLVED: 'Fixed',
+};
 
 const INFRA_CLASSES: DetectionClass[] = [
   'POTHOLE',
@@ -203,6 +245,7 @@ export const ROLES: Record<RoleId, RoleConfig> = {
       { id: 'map', label: 'Map' },
       { id: 'report', label: 'Report' },
     ],
+    publicOnly: true,
     homeTab: 'map',
   },
   'urban-planner': {

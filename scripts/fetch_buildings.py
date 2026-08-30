@@ -205,8 +205,10 @@ def main() -> int:
 
     OUT.write_text(json.dumps(collection, separators=(",", ":")))
     size_kb = OUT.stat().st_size // 1024
-    print(f"  bbox: S{BBOX[0]:.4f} W{BBOX[1]:.4f} N{BBOX[2]:.4f} E{BBOX[3]:.4f} "
-          f"(seeded routes + {PAD_M:.0f} m)")
+    print(
+        f"  bbox: S{BBOX[0]:.4f} W{BBOX[1]:.4f} N{BBOX[2]:.4f} E{BBOX[3]:.4f} "
+        f"(seeded routes + {PAD_M:.0f} m)"
+    )
     where = OUT.relative_to(Path.cwd()) if OUT.is_relative_to(Path.cwd()) else OUT
     print(f"\n  ✔ wrote {where}  ({size_kb} KB)")
     if size_kb > 5000:

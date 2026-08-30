@@ -46,9 +46,7 @@ def test_a_junction_fires_when_its_bus_passes(detector: MockNearMissDetector) ->
 
 def test_a_junction_does_not_fire_for_the_wrong_bus(detector: MockNearMissDetector) -> None:
     junction = _JUNCTIONS[0]
-    observations = detector.detect(
-        None, meta_at(junction.lat, junction.lon, "MTC-TNAGAR-1875")
-    )
+    observations = detector.detect(None, meta_at(junction.lat, junction.lon, "MTC-TNAGAR-1875"))
     assert observations == []
 
 
@@ -74,9 +72,7 @@ def test_reset_rearms_every_junction(detector: MockNearMissDetector) -> None:
     junction = _JUNCTIONS[0]
     detector.detect(None, meta_at(junction.lat, junction.lon, junction.bus_id))
     detector.reset()
-    again = detector.detect(
-        None, meta_at(junction.lat, junction.lon, junction.bus_id, frame_idx=3)
-    )
+    again = detector.detect(None, meta_at(junction.lat, junction.lon, junction.bus_id, frame_idx=3))
     assert len(again) == 1
 
 

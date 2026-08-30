@@ -17,6 +17,7 @@ import { Layers, Moon, Sun } from 'lucide-react';
 import { useRoles } from '../store';
 import { LiteMap, type LiteBus, type LitePoint } from '../../components/LiteMap';
 import { RISK_BAND_COLOR, titleCase } from '../lib/api';
+import { ROLES } from '../roles/config';
 
 const SEVERITY_STYLE = {
   LARGE: { color: '#ef4444', radius: 9 },
@@ -33,6 +34,10 @@ export function MapScreen() {
   const selectedRoadId = useRoles((s) => s.selectedRoadId);
   const selectRoad = useRoles((s) => s.selectRoad);
   const openDetail = useRoles((s) => s.openDetail);
+  const role = useRoles((s) => s.role);
+  // the public map is a different dataset, not a restyled operator one — the
+  // road-condition panel (PCI, congestion, risk band) is operational data
+  const publicView = Boolean(role && ROLES[role].publicOnly);
   const [severityOnly, setSeverityOnly] = useState(false);
 
   const points = useMemo<LitePoint[]>(() => {
@@ -59,8 +64,14 @@ export function MapScreen() {
       <div className="flex min-h-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3 lg:px-6">
           <div>
-            <h1 className="text-base font-bold tracking-tight text-ink">Map</h1>
-            <p className="text-[11px] text-muted">{points.length} events in view</p>
+            <h1 className="text-base tracking-tight text-ink">
+              {publicView ? 'Public map' : 'Map'}
+            </h1>
+            <p className="text-[11px] text-muted">
+              {publicView
+                ? `${points.length} confirmed issues · unverified detections are not shown`
+                : `${points.length} events in view`}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -110,6 +121,7 @@ export function MapScreen() {
         </div>
       </div>
 
+      {!publicView && (
       <div className="shrink-0 border-t border-line lg:w-72 lg:border-l lg:border-t-0">
         <div className="border-b border-line px-4 py-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
@@ -157,6 +169,7 @@ export function MapScreen() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

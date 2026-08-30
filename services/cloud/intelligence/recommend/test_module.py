@@ -89,7 +89,11 @@ def test_zebra_crossing_needs_all_three_conditions(engine: RecommendationEngine)
     assert RecommendationType.ZEBRA_CROSSING not in types_of(
         engine.recommend(
             ROAD,
-            ctx(defect_counts={"ZEBRA_CROSSING": 1}, school_zone_distance_m=50.0, pedestrian_density=1.0),
+            ctx(
+                defect_counts={"ZEBRA_CROSSING": 1},
+                school_zone_distance_m=50.0,
+                pedestrian_density=1.0,
+            ),
         )
     )
     # all three: yes, and HIGH priority

@@ -23,6 +23,7 @@ import { GraduationCap, Layers, PersonStanding, ShieldCheck, Zap } from 'lucide-
 import type { PanelProps, UTEvent, WorkflowStatus } from '../lib/types';
 import { STATUS_LABEL, statusChipClass } from '../lib/colors';
 import { timeAgo } from '../lib/format';
+import { SCHOOL_ZONE_COUNT, SCHOOL_ZONE_SPEED_LIMIT_KMPH } from '../lib/cityRef';
 
 /** Mirrors `contracts.derive_status`. If that ladder changes, change this. */
 const LADDER: Array<{
@@ -95,7 +96,7 @@ export function RiskPanel({ events, selected, onSelect }: PanelProps) {
           </div>
           <div className="rounded-lg border border-white/10 bg-ink-700/60 px-2.5 py-2">
             <div className="flex items-center gap-1 font-mono text-lg font-semibold leading-none text-sky-300">
-              <GraduationCap size={16} /> 3
+              <GraduationCap size={16} /> {SCHOOL_ZONE_COUNT}
             </div>
             <div className="mt-1 text-[10px] uppercase tracking-wider text-slate-400">
               School zones monitored
@@ -117,8 +118,9 @@ export function RiskPanel({ events, selected, onSelect }: PanelProps) {
         </div>
       ) : (
         <p className="border-b border-white/5 px-4 py-5 text-center text-[11px] leading-relaxed text-slate-500">
-          No pedestrian risk events yet. They appear when a bus passes one of the three seeded
-          school zones — faster than 25 km/h raises the rate sharply.
+          No pedestrian risk events yet. They appear when a bus passes one of the{' '}
+          {SCHOOL_ZONE_COUNT} seeded school zones — faster than{' '}
+          {SCHOOL_ZONE_SPEED_LIMIT_KMPH} km/h raises the rate sharply.
         </p>
       )}
 

@@ -16,9 +16,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useRoles } from '../store';
-import { ROLES } from '../roles/config';
+import { PUBLIC_STATUS_LABEL, ROLES } from '../roles/config';
 import { StatusLadder } from '../components/StatusLadder';
 import { SEVERITY_COLOR, STATUS_LABEL, slaText, timeAgo, titleCase, type WorkflowStatus } from '../lib/api';
+import { evidenceImage } from '../../lib/evidence';
 
 const ACTIONS: Array<{ status: WorkflowStatus; label: string; tone: string; icon: React.ReactNode }> = [
   {
@@ -67,6 +68,12 @@ export function Detail() {
   const advance = useRoles((s) => s.advance);
   const [notes, setNotes] = useState('');
   const canApprove = ROLES[role].permissions.approve;
+  //  A citizen gets the public view of the same record: what it is, where it
+  //  is, and what the city is doing about it. No confidence score, no bus
+  //  count, no sighting count, no raw workflow enum, no SLA clock — those are
+  //  the city's operational internals, and publishing them would also expose
+  //  which bus was where and when. See PUBLIC_STATUSES in roles/config.ts.
+  const publicView = Boolean(ROLES[role].publicOnly);
 
   if (kind === 'incident' && incident) {
     return (
@@ -141,13 +148,26 @@ export function Detail() {
       </header>
 
       <div className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto pb-4">
-        <div className="flex h-40 items-center justify-center border-b border-line bg-surface2">
-          <div className="text-center text-muted">
-            <Camera size={26} className="mx-auto" />
-            <p className="mt-1.5 text-[11px]">
-              {event.evidence_uris.length} evidence frame{event.evidence_uris.length === 1 ? '' : 's'}
-              {' · '}
-              {event.distinct_bus_count > 1 ? 'actual sighting, corroborated' : 'single sighting'}
+        <div className="relative border-b border-line bg-surface2">
+          <img
+            src={evidenceImage({
+              id: event.event_id,
+              detectionClass: event.detection_class,
+              severity: event.severity,
+              ts: event.first_seen,
+            })}
+            alt={`Synthetic evidence card for ${titleCase(event.detection_class)}`}
+            className="h-40 w-full object-cover"
+          />
+          <div className="px-4 py-2 text-center text-muted">
+            <p className="text-[11px]">
+              {publicView
+                ? 'Reported by the city bus fleet'
+                : `${event.evidence_uris.length} evidence frame${
+                    event.evidence_uris.length === 1 ? '' : 's'
+                  } · ${
+                    event.distinct_bus_count > 1 ? 'actual sighting, corroborated' : 'single sighting'
+                  }`}
             </p>
           </div>
         </div>
@@ -158,34 +178,51 @@ export function Detail() {
               {event.severity}
             </span>
             <span className="rounded-lg border border-line bg-surface2 px-2.5 py-1 text-[11px] text-ink/70">
-              {STATUS_LABEL[event.status]}
+              {publicView ? PUBLIC_STATUS_LABEL[event.status] : STATUS_LABEL[event.status]}
             </span>
-            <span
-              className={`rounded-lg border px-2.5 py-1 text-[11px] ${
-                sla.overdue ? 'border-red-200 bg-red-50 text-red-700' : 'border-line bg-surface2 text-muted'
-              }`}
-            >
-              SLA {sla.text}
-            </span>
+            {!publicView && (
+              <span
+                className={`rounded-lg border px-2.5 py-1 text-[11px] ${
+                  sla.overdue ? 'border-red-200 bg-red-50 text-red-700' : 'border-line bg-surface2 text-muted'
+                }`}
+              >
+                SLA {sla.text}
+              </span>
+            )}
           </div>
 
-          <dl className="grid grid-cols-2 gap-2">
-            <Fact icon={<MapPin size={12} />} label="Location" value={event.road_segment_id ?? '—'} />
-            <Fact
-              icon={<ShieldCheck size={12} />}
-              label="Confidence"
-              value={`${Math.round(event.fused_confidence * 100)}%`}
-            />
-            <Fact icon={<Users size={12} />} label="Buses" value={String(event.distinct_bus_count)} />
-            <Fact icon={<Camera size={12} />} label="Sightings" value={String(event.observation_count)} />
-          </dl>
+          {publicView ? (
+            <>
+              <dl className="grid grid-cols-2 gap-2">
+                <Fact icon={<MapPin size={12} />} label="Street" value={event.road_segment_id ?? '—'} />
+                <Fact icon={<Camera size={12} />} label="Reported" value={`${timeAgo(event.first_seen)} ago`} />
+              </dl>
+              <p className="text-[11px] leading-relaxed text-muted">
+                Spotted by buses in service and confirmed by the city. Detection confidence,
+                which vehicles saw it and internal workflow timings are not published.
+              </p>
+            </>
+          ) : (
+            <>
+              <dl className="grid grid-cols-2 gap-2">
+                <Fact icon={<MapPin size={12} />} label="Location" value={event.road_segment_id ?? '—'} />
+                <Fact
+                  icon={<ShieldCheck size={12} />}
+                  label="Confidence"
+                  value={`${Math.round(event.fused_confidence * 100)}%`}
+                />
+                <Fact icon={<Users size={12} />} label="Buses" value={String(event.distinct_bus_count)} />
+                <Fact icon={<Camera size={12} />} label="Sightings" value={String(event.observation_count)} />
+              </dl>
 
-          <StatusLadder status={event.status} />
+              <StatusLadder status={event.status} />
 
-          <p className="text-[11px] leading-relaxed text-muted">
-            First reported {timeAgo(event.first_seen)} ago, last confirmed {timeAgo(event.last_seen)} ago
-            {event.assigned_team ? ` · ${event.assigned_team}` : ''}.
-          </p>
+              <p className="text-[11px] leading-relaxed text-muted">
+                First reported {timeAgo(event.first_seen)} ago, last confirmed {timeAgo(event.last_seen)} ago
+                {event.assigned_team ? ` · ${event.assigned_team}` : ''}.
+              </p>
+            </>
+          )}
 
           <a
             href={`https://www.google.com/maps/dir/?api=1&destination=${event.lat},${event.lon}`}
@@ -224,7 +261,9 @@ export function Detail() {
             </>
           ) : (
             <p className="rounded-xl border border-line bg-surface2 px-3 py-2.5 text-[11px] text-muted">
-              Your role can view this report but not change its workflow status.
+              {publicView
+                ? 'This is a public record of work the city has accepted. Use Report to tell them about something new.'
+                : 'Your role can view this report but not change its workflow status.'}
             </p>
           )}
         </div>

@@ -21,7 +21,7 @@ import {
   type WhatIfResult,
   type WorkflowStatus,
 } from './lib/api';
-import { ROLES, type RoleId, type TabId } from './roles/config';
+import { PUBLIC_STATUSES, ROLES, type RoleId, type TabId } from './roles/config';
 
 const ROLE_KEY = 'urban-twin.role';
 const REPORTS_KEY = 'urban-twin.citizen-reports';
@@ -255,7 +255,7 @@ export const useRoles = create<State>((set, get) => ({
       ts: new Date().toISOString(),
     };
     const reports = [report, ...get().citizenReports];
-    set({ citizenReports: reports, toast: 'Thanks — logged for your ward office' });
+    set({ citizenReports: reports, toast: 'Saved on this device' });
     try {
       localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
     } catch {
@@ -282,8 +282,18 @@ export const useRoles = create<State>((set, get) => ({
 
   scopedEvents: () => {
     const role = get().role;
-    const classes = role ? ROLES[role].feedClasses : undefined;
-    const events = get().events;
+    const config = role ? ROLES[role] : null;
+    let events = get().events;
+
+    // The public map is genuinely a different dataset, not a restyled operator
+    // one: a citizen sees only what the city has actually confirmed and acted
+    // on. Unverified machine output (DETECTED, AI_VERIFIED) and rejected
+    // reports never leave the operator console. See PUBLIC_STATUSES.
+    if (config?.publicOnly) {
+      events = events.filter((event) => PUBLIC_STATUSES.has(event.status));
+    }
+
+    const classes = config?.feedClasses;
     if (!classes) return events;
     const wanted = new Set(classes);
     return events.filter((event) => wanted.has(event.detection_class));
