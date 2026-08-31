@@ -60,7 +60,7 @@ interface LiveState {
   /** Merge a response we just wrote, without waiting for the broadcast. */
   applyResponse: (response: IncidentResponse) => void;
 
-  connect: (role: MobileRoleId) => void;
+  connect: (role: MobileRoleId, reporter?: string) => void;
   disconnect: () => void;
   hydrate: (role: MobileRoleId) => Promise<void>;
 
@@ -136,13 +136,13 @@ export const useLive = create<LiveState>((set, get) => ({
     });
   },
 
-  connect(role) {
+  connect(role, reporter) {
     if (socket) return;
 
     void get().hydrate(role);
 
     socket = new LiveSocket({
-      url: wsUrlFor(role === 'citizen' ? 'public' : 'operator'),
+      url: wsUrlFor(role === 'citizen' ? 'public' : 'operator', reporter),
       onState: (connection) => set({ connection }),
       onMessage: (message: WSMessage) => {
         set({ lastFrameAt: Date.now() });
@@ -188,6 +188,29 @@ export const useLive = create<LiveState>((set, get) => ({
             const report = message.payload as unknown as CitizenReport;
             if (get().reports.some((existing) => existing.report_id === report.report_id)) break;
             set({ reports: [report, ...get().reports].slice(0, 500) });
+            break;
+          }
+
+          case 'REPORT_UPDATED': {
+            // The citizen half of the loop: a report linked to an event
+            // follows it up the ladder, so a timeline moves while somebody is
+            // looking at it.
+            //
+            // Replaced in place rather than moved to the front — the list is
+            // ordered by `created_at`, which a status change does not alter,
+            // and a report jumping up the list as it changes state would be
+            // motion with no meaning. An update for a report this client has
+            // never seen is inserted, because a reconnect can miss the NEW.
+            const report = message.payload as unknown as CitizenReport;
+            const reports = get().reports;
+            const index = reports.findIndex((r) => r.report_id === report.report_id);
+            if (index === -1) {
+              set({ reports: [report, ...reports].slice(0, 500) });
+            } else {
+              const next = [...reports];
+              next[index] = report;
+              set({ reports: next });
+            }
             break;
           }
 

@@ -12,6 +12,14 @@ RULES
   3. Additive changes (new optional field, new enum member) are cheap.
      Renames and removals are not — they break five people simultaneously.
 
+AMENDMENT (v1.4.0) — ⚠️ NEEDS TEAM ACK (approved, pending the ACK round).
+One new enum member: WSMessageType.REPORT_UPDATED, so a citizen's report can
+change status on a phone that is already looking at it. ReportStatus itself
+was added in v1.2.0 and is unchanged; what is new is that its rungs are now
+reachable. No model, field or signature changed. Owners touched: M5
+(endpoint, propagation), M6 (generated types, timeline). See BUILD.md §14.
+Contracts are RE-FROZEN as of this version.
+
 AMENDMENT (v1.3.0) — ⚠️ NEEDS TEAM ACK. Closes the three "no endpoint yet"
 gaps the phone app was carrying: ResponseState, CameraState,
 TERMINAL_RESPONSE_STATES, RESPONSE_ORDER, WSMessageType.INCIDENT_RESPONSE,
@@ -120,7 +128,7 @@ from .topics import (
 #: 1.1.0 — the one-time AI intelligence layer amendment (near-miss, urban risk
 #: index, recommendations). Additive only: nothing existing renamed or removed.
 #: Re-frozen as of this version. See BUILD.md for the amendment record.
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 __all__ = [
     # enums

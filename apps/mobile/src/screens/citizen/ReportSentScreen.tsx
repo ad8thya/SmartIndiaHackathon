@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Check, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronRight, Link2, Plus } from 'lucide-react';
 import { api } from '../../lib/api';
 import { CATEGORY_LABEL } from '../../lib/display';
 import type { CitizenReport } from '../../lib/types';
@@ -66,6 +66,18 @@ export function ReportSentScreen() {
           the city now. You will see it move through inspection and repair on the “My reports”
           screen.
         </p>
+
+        {/* Said at the moment it happens, rather than left for the citizen to
+            discover on another screen later. */}
+        {report?.linked_event_id ? (
+          <div className="mx-auto mt-4 flex max-w-[300px] items-start gap-2.5 rounded-[12px] bg-accent/[0.06] px-3.5 py-3 text-left">
+            <Link2 size={15} className="mt-0.5 flex-none text-accent" />
+            <p className="text-[12px] leading-relaxed text-ink-soft">
+              The buses had already spotted something here, so your report was matched to that
+              case. It will follow the city&rsquo;s work on it.
+            </p>
+          </div>
+        ) : null}
 
         <div className="mt-7 flex flex-col gap-2.5">
           <Link

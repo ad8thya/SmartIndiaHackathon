@@ -1,10 +1,10 @@
 /**
  * GENERATED from packages/contracts — do not edit by hand.
  * Regenerate with:  .venv/bin/python scripts/gen_frontend_types.py
- * contracts version: 1.3.0
+ * contracts version: 1.4.0
  */
 
-export const CONTRACTS_VERSION = "1.3.0";
+export const CONTRACTS_VERSION = "1.4.0";
 
 export type DetectionClass =
   | 'POTHOLE'
@@ -94,6 +94,7 @@ export type WSMessageType =
   | 'ROAD_CONDITION'
   | 'INCIDENT'
   | 'REPORT_NEW'
+  | 'REPORT_UPDATED'
   | 'INCIDENT_RESPONSE'
   | 'TICK';
 

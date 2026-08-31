@@ -44,8 +44,14 @@ function timeline(report: CitizenReport): Step[] {
   if (report.status === 'LINKED') {
     steps.splice(2, 0, {
       id: 'linked',
-      label: 'Matched to a problem the city already knew about',
-      detail: 'Your report was added to an existing case.',
+      // Accurate about what happened: the fleet had already detected something
+      // at this spot and the two records were joined automatically by
+      // proximity and category. It does NOT mean anyone has looked at it yet
+      // — that is the next rung — and it does not mean the report was
+      // duplicated away, which "already knew about" could imply.
+      label: 'Matched to something the buses had already spotted here',
+      detail:
+        'Your report now follows that case, so this timeline updates as the city works on it.',
       state: 'current',
     });
   }

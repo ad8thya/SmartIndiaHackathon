@@ -31,6 +31,10 @@ async def live(
         default="operator",
         description="'public' strips operator-only fields and non-public events",
     ),
+    reporter: str | None = Query(
+        default=None,
+        description="on a public socket, receive report updates for this reporter only",
+    ),
 ) -> None:
     """The realtime channel.
 
@@ -54,7 +58,9 @@ async def live(
 
     try:
         await websocket.send_text(_hello(public=public).model_dump_json())
-        pump = asyncio.create_task(_pump(websocket, queue, public=public))
+        pump = asyncio.create_task(
+            _pump(websocket, queue, public=public, reporter=reporter if public else None)
+        )
         try:
             # we do not expect client messages, but reading keeps the socket
             # honest and gives us a clean disconnect signal
@@ -73,13 +79,20 @@ async def live(
         log.info("websocket closed (%d remain)", broadcaster.subscriber_count)
 
 
-async def _pump(websocket: WebSocket, queue: asyncio.Queue[str], *, public: bool) -> None:
+async def _pump(
+    websocket: WebSocket,
+    queue: asyncio.Queue[str],
+    *,
+    public: bool,
+    reporter: str | None,
+) -> None:
     while True:
         message = await queue.get()
         if public:
-            message = _for_public(message)
-            if message is None:
+            projected = _for_public(message, reporter=reporter)
+            if projected is None:
                 continue
+            message = projected
         await websocket.send_text(message)
 
 
@@ -102,13 +115,39 @@ _PUBLIC_FRAME_TYPES: frozenset[str] = frozenset(
     }
 )
 
+#: Report frames are conditionally allowed: a citizen receives updates about
+#: THEIR OWN reports and nobody else's. See `_is_mine`.
+_REPORT_FRAME_TYPES: frozenset[str] = frozenset(
+    {WSMessageType.REPORT_NEW.value, WSMessageType.REPORT_UPDATED.value}
+)
+
 #: Deliberately absent from the allowlist above:
 #:   INCIDENT           — collision dossier: narrative, evidence, plate hash
 #:   INCIDENT_RESPONSE  — which crew is responding, and when
-#:   REPORT_NEW         — another citizen's report, with their name on it
 
 
-def _for_public(message: str) -> str | None:
+def _is_mine(payload: dict[str, object], reporter: str | None) -> bool:
+    """Whether this report belongs to the citizen on the other end.
+
+    Matched on `reporter_name`, which is the display name the phone signed in
+    with. That is exactly as weak as it sounds — this prototype has no
+    authentication (see apps/mobile/src/store/session.ts), so there is no
+    identity to match on and a client could claim any name.
+
+    It is still worth doing. Without it a citizen socket receives every
+    report every other citizen files, names included, which is a different
+    and worse thing than a weak filter. When real auth arrives this becomes a
+    check against the authenticated subject and nothing else changes.
+
+    A socket that gave no `reporter` gets no report frames at all — the safe
+    default, since "no name" cannot mean "everyone's".
+    """
+    if not reporter:
+        return False
+    return payload.get("reporter_name") == reporter
+
+
+def _for_public(message: str, *, reporter: str | None = None) -> str | None:
     """Project one frame for a citizen socket, or drop it entirely.
 
     Returns None when the frame must not be sent — an event below
@@ -125,6 +164,13 @@ def _for_public(message: str) -> str | None:
         return None
 
     frame_type = frame.get("type")
+
+    if frame_type in _REPORT_FRAME_TYPES:
+        # A citizen's own report, and only their own. CitizenReport carries no
+        # operator fields, so the payload passes through unprojected — what it
+        # does carry is the reporter's own name, which is theirs to see.
+        return message if _is_mine(frame.get("payload") or {}, reporter) else None
+
     if frame_type not in _PUBLIC_FRAME_TYPES:
         return None
 

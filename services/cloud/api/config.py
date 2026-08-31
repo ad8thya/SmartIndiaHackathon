@@ -36,6 +36,17 @@ class ApiSettings(BaseSettings):
     #: build is produced with `VITE_BASE=/m/` to match.
     MOBILE_DIST: str | None = None
 
+    #: How close a citizen report must be to an existing fused Event before
+    #: the two are treated as the same real-world thing.
+    #:
+    #: 30 m is about the length of a bus. Wider and a report about one pothole
+    #: attaches itself to a different pothole down the street, which is worse
+    #: than not linking at all: the citizen is then told their report was
+    #: fixed when the thing they photographed is still there. Narrower and
+    #: ordinary phone GPS error (5–15 m in a street with buildings) stops a
+    #: genuine match.
+    REPORT_LINK_RADIUS_M: float = 30.0
+
     #: Where the offline basemap lives: the pmtiles extract, its glyphs and its
     #: sprites. Served at `/map` unconditionally — NOT off `WEB_DIST`.
     #:

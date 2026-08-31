@@ -741,3 +741,90 @@ in-memory cache. On a fresh process that cache is empty, so **one malformed row
 emptied the entire operator backlog while the database was healthy.** Rows are
 now validated individually: a bad one is a warning and a gap, not a blank
 console.
+
+---
+
+## 14. The citizen loop — contracts amendment (v1.4.0)
+
+> ⚠️ **APPROVED, PENDING ACK.** Owners touched: **M5** (linking, propagation,
+> endpoint), **M6** (generated types, timeline). Goes in the same ACK round as
+> §10, §12 and §13.
+
+**One new enum member: `WSMessageType.REPORT_UPDATED`.** `ReportStatus` itself
+arrived in v1.2.0 and is unchanged — what is new is that its rungs are now
+reachable. No model, field or Protocol signature changed. **No migration:**
+`citizen_reports.status` and `.linked_event_id` already existed;
+`alembic revision --autogenerate` still comes back empty.
+
+### The problem: `linked_event_id` was never set
+
+All 47 reports in the database were `SUBMITTED` and every `linked_event_id`
+was null. Nothing could set either. So five of the six `ReportStatus` rungs
+were unreachable, and the timeline the phone drew — Sent → Seen by the city →
+Being fixed → Fixed — was **decoration over data that could not move**.
+
+### Linking is automatic, by proximity
+
+`services/cloud/api/report_linking.py`. On `POST /api/reports`, the nearest
+compatible `Event` within `REPORT_LINK_RADIUS_M` (30 m) is linked and the
+report is created `LINKED` rather than `SUBMITTED`.
+
+**Automatic rather than operator-driven** because the alternative needs
+somebody at a desk pressing a button, which means the loop cannot be walked
+end to end by one person and in practice never happens.
+
+**30 m is about the length of a bus.** Wider and a report about one pothole
+attaches to a different pothole down the street — worse than not linking,
+because the citizen is then told their report was fixed while the thing they
+photographed is still there. Narrower and ordinary phone GPS error (5–15 m
+between buildings) stops a genuine match.
+
+**Nearest, not first.** Two potholes can both be in range on a wide junction.
+
+**Category → class is written out, not inferred.** A person picks from six
+buttons; a model emits twelve classes. `STREETLIGHT`, `GARBAGE` and `OTHER`
+map to nothing — the fleet does not detect any of them — so those reports
+stand alone in the backlog forever. **That is correct, not a failure.**
+
+**Linking is not fusion.** A linked report contributes nothing to
+`fused_confidence`, `observation_count` or `distinct_bus_count`. A person is
+not a corroborating camera, and letting citizen input move the workflow ladder
+would let anyone with a phone escalate an event by reporting the same spot
+repeatedly.
+
+### Propagation lives in the event ladder, not a poller
+
+`_propagate_to_reports` is called from `patch_status`, the one place an
+event's status actually changes. A background job comparing two ladders would
+be a second source of truth about when a report moved, and would lag by its
+own interval on the exact screen a citizen is looking at.
+
+| event reaches | the citizen is told |
+|---|---|
+| `AUTHORITY_NOTIFIED` | Seen by the city |
+| `INSPECTION` / `MAINTENANCE_ASSIGNED` / `REPAIR_COMPLETED` | Being fixed |
+| `VERIFIED` / `RESOLVED` | Fixed |
+| `REJECTED` | Closed without action |
+
+`DETECTED` and `AI_VERIFIED` are deliberately absent: telling a citizen "the
+city has seen your report" on the strength of unreviewed machine output would
+be a claim nobody has made. And a report that has reached `RESOLVED` or
+`REJECTED` is never walked backwards — a citizen told "fixed" and then "being
+fixed" a minute later has learned only that the app is unreliable.
+
+A test asserts every `ReportStatus` rung is produced by some code path, so a
+dead state cannot be reintroduced quietly.
+
+### The audience question
+
+`REPORT_UPDATED` has to reach the citizen who filed it without exposing
+anyone else's reports. The socket takes `?reporter=` alongside `?audience=`,
+and report frames are forwarded only when `reporter_name` matches. A socket
+that gives no reporter receives **no** report frames — "no name" cannot mean
+"everyone's".
+
+This matches on a display name, which is exactly as weak as it sounds: there
+is no authentication in this prototype, so there is no identity to match on.
+It is still worth doing — without it a citizen socket carries every report
+every other citizen files, names included — and when real auth arrives it
+becomes a check against the authenticated subject with nothing else changing.

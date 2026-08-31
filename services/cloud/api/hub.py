@@ -69,6 +69,19 @@ class LiveState:
     def add_report(self, report: CitizenReport) -> None:
         self.reports.appendleft(report)
 
+    def replace_report(self, report: CitizenReport) -> None:
+        """Swap a report in place, keeping its position in the list.
+
+        Newest-first ordering is by `created_at`, which never changes, so a
+        status change must not reorder anything — a citizen watching their
+        report move to "Fixed" should not also watch it jump up the list.
+        """
+        for index, existing in enumerate(self.reports):
+            if existing.report_id == report.report_id:
+                self.reports[index] = report
+                return
+        self.reports.appendleft(report)
+
     def apply_event(self, event: Event) -> WSMessageType:
         """Store a fused event and report whether it is new or an update."""
         previous = self.events.get(event.event_id)

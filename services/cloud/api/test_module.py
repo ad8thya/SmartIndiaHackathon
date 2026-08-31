@@ -883,3 +883,163 @@ def test_public_socket_drops_unknown_frame_types(client: TestClient) -> None:
     assert _for_public(invented) is None
 
     assert _for_public("not json at all") is None
+
+
+# ── the citizen loop ────────────────────────────────────────────────────────
+# Until a report is linked to an event, "your report was fixed" can never
+# fire and the phone's timeline is decoration. These cover both halves:
+# automatic linking on POST, and propagation down the event ladder.
+
+
+def _seed_pothole(status: WorkflowStatus = WorkflowStatus.DETECTED) -> Event:
+    return make_event(status)
+
+
+def test_a_report_next_to_a_known_pothole_links_itself(
+    client: TestClient, media_dir: object
+) -> None:
+    event = _seed_pothole()
+    filed = client.post(
+        "/api/reports",
+        json=_report_body(category="POTHOLE", lat=event.lat, lon=event.lon),
+    ).json()
+
+    assert filed["linked_event_id"] == str(event.event_id)
+    # LINKED, not SUBMITTED — the citizen is told on the success screen.
+    assert filed["status"] == "LINKED"
+
+
+def test_a_report_far_away_stands_alone(client: TestClient, media_dir: object) -> None:
+    """Not a failure. An unlinked report is a standalone backlog item."""
+    event = _seed_pothole()
+    filed = client.post(
+        "/api/reports",
+        json=_report_body(category="POTHOLE", lat=event.lat + 0.05, lon=event.lon + 0.05),
+    ).json()
+
+    assert filed["linked_event_id"] is None
+    assert filed["status"] == "SUBMITTED"
+
+
+def test_an_incompatible_category_does_not_link(client: TestClient, media_dir: object) -> None:
+    """A streetlight report must not attach itself to a pothole just because
+    it is standing on top of one. The fleet does not detect streetlights at
+    all, so that category maps to no class and correctly links to nothing."""
+    event = _seed_pothole()
+    filed = client.post(
+        "/api/reports",
+        json=_report_body(category="STREETLIGHT", lat=event.lat, lon=event.lon),
+    ).json()
+    assert filed["linked_event_id"] is None
+
+
+def test_the_nearest_compatible_event_wins(client: TestClient, media_dir: object) -> None:
+    """Two potholes can both be in range on a wide junction; picking whichever
+    came first in the list would be arbitrary in a way a citizen notices."""
+    near = make_event(WorkflowStatus.DETECTED)
+    far = Event(
+        event_id=uuid4(),
+        lat=near.lat + 0.0002,  # ~22 m — still inside the radius
+        lon=near.lon,
+        road_segment_id=near.road_segment_id,
+        detection_class=DetectionClass.POTHOLE,
+        severity=Severity.SMALL,
+        fused_confidence=0.8,
+        observation_count=2,
+        distinct_bus_count=2,
+        first_seen=NOW,
+        last_seen=NOW,
+        status=WorkflowStatus.DETECTED,
+    )
+    state.replace_event(far)
+
+    filed = client.post(
+        "/api/reports", json=_report_body(category="POTHOLE", lat=near.lat, lon=near.lon)
+    ).json()
+    assert filed["linked_event_id"] == str(near.event_id)
+
+
+def test_the_report_follows_the_event_up_the_ladder(
+    client: TestClient, media_dir: object
+) -> None:
+    """The whole point. Every rung the phone draws must be reachable."""
+    event = _seed_pothole()
+    filed = client.post(
+        "/api/reports", json=_report_body(category="POTHOLE", lat=event.lat, lon=event.lon)
+    ).json()
+    report_id = filed["report_id"]
+
+    for event_status, expected in (
+        (WorkflowStatus.AUTHORITY_NOTIFIED, "ACKNOWLEDGED"),
+        (WorkflowStatus.INSPECTION, "IN_PROGRESS"),
+        (WorkflowStatus.RESOLVED, "RESOLVED"),
+    ):
+        client.patch(f"/api/events/{event.event_id}/status", json={"status": str(event_status)})
+        assert client.get(f"/api/reports/{report_id}").json()["status"] == expected
+
+
+def test_a_finished_report_is_never_walked_backwards(
+    client: TestClient, media_dir: object
+) -> None:
+    """A citizen told "fixed" and then "being fixed" a minute later has learned
+    only that the app is unreliable."""
+    event = _seed_pothole()
+    filed = client.post(
+        "/api/reports", json=_report_body(category="POTHOLE", lat=event.lat, lon=event.lon)
+    ).json()
+
+    client.patch(f"/api/events/{event.event_id}/status", json={"status": "RESOLVED"})
+    assert client.get(f"/api/reports/{filed['report_id']}").json()["status"] == "RESOLVED"
+
+    client.patch(f"/api/events/{event.event_id}/status", json={"status": "INSPECTION"})
+    assert client.get(f"/api/reports/{filed['report_id']}").json()["status"] == "RESOLVED"
+
+
+def test_every_report_status_is_reachable() -> None:
+    """No dead rungs. If the UI draws a state, some code path must produce it."""
+    from contracts import ReportStatus
+
+    from services.cloud.api.report_linking import EVENT_STATUS_TO_REPORT_STATUS
+
+    reachable = {ReportStatus.SUBMITTED, ReportStatus.LINKED}  # the two POST outcomes
+    reachable |= set(EVENT_STATUS_TO_REPORT_STATUS.values())
+
+    unreachable = set(ReportStatus) - reachable
+    assert not unreachable, f"the UI can draw {sorted(unreachable)} but nothing produces it"
+
+
+def test_patch_can_override_the_automatic_link(client: TestClient, media_dir: object) -> None:
+    """Automatic is the default path; an operator who knows better can correct
+    it in either direction."""
+    event = _seed_pothole()
+    filed = client.post(
+        "/api/reports", json=_report_body(category="POTHOLE", lat=event.lat, lon=event.lon)
+    ).json()
+
+    unlinked = client.patch(f"/api/reports/{filed['report_id']}", json={"unlink": True})
+    assert unlinked.status_code == 200
+    assert unlinked.json()["linked_event_id"] is None
+
+    acked = client.patch(f"/api/reports/{filed['report_id']}", json={"status": "ACKNOWLEDGED"})
+    assert acked.json()["status"] == "ACKNOWLEDGED"
+
+    assert client.patch(f"/api/reports/{filed['report_id']}", json={}).status_code == 422
+
+
+def test_report_updates_reach_only_their_own_reporter() -> None:
+    """A citizen socket must not carry other people's reports, names included."""
+    import json as _json
+
+    from services.cloud.api.routers.ws import _for_public
+
+    frame = _json.dumps(
+        {
+            "type": "REPORT_UPDATED",
+            "ts": NOW.isoformat(),
+            "payload": {"reporter_name": "Alice", "status": "RESOLVED"},
+        }
+    )
+    assert _for_public(frame, reporter="Alice") is not None
+    assert _for_public(frame, reporter="Bob") is None
+    # No name given cannot mean "everyone's".
+    assert _for_public(frame, reporter=None) is None

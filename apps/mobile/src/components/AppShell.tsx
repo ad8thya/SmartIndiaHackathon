@@ -48,9 +48,9 @@ export function AppShell() {
    * keep one that was filtered for somebody else.
    */
   useEffect(() => {
-    connect(session.role);
+    connect(session.role, session.displayName);
     return () => disconnect();
-  }, [connect, disconnect, session.role]);
+  }, [connect, disconnect, session.role, session.displayName]);
 
   // Longest matching tab wins, so /citizen/report does not resolve to the
   // /citizen home tab just because the prefix matches.

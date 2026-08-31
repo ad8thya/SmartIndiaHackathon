@@ -291,6 +291,17 @@ async def patch_status(event_id: UUID, patch: StatusPatch, state: State, broadca
         log.warning("could not persist status change for %s: %s", event_id, exc)
 
     broadcaster.publish(WSMessageType.EVENT_UPDATED, updated.model_dump(mode="json"))
+
+    # The citizen half of the loop. A report linked to this event follows it up
+    # the ladder, so somebody who photographed a pothole watches their own
+    # timeline reach "Fixed" without anyone telling them.
+    #
+    # It lives HERE, in the one place an event's status actually changes,
+    # rather than in a poller: a background job comparing two ladders would be
+    # a second source of truth about when a report moved, and would lag by its
+    # own interval on the exact screen a citizen is looking at.
+    await _propagate_to_reports(updated, state, broadcaster)
+
     return updated
 
 
@@ -360,7 +371,43 @@ async def add_evidence(
         log.warning("could not persist evidence for %s: %s", event_id, exc)
 
     broadcaster.publish(WSMessageType.EVENT_UPDATED, updated.model_dump(mode="json"))
+
+
     return updated
+
+
+async def _propagate_to_reports(event: Event, state: LiveState, broadcaster: object) -> None:
+    """Advance any citizen report linked to this event.
+
+    Failures are logged and swallowed. The operator's status change has
+    already succeeded and been broadcast; losing the citizen-side follow-up is
+    a worse outcome than losing it AND rolling back a repair that really
+    happened.
+    """
+    from ..report_linking import report_status_for
+    from .reports import _save_and_broadcast, merged_reports
+
+    try:
+        linked = [
+            report
+            for report in await merged_reports(state)
+            if report.linked_event_id == event.event_id
+        ]
+    except Exception as exc:
+        log.warning("could not load reports linked to %s: %s", event.event_id, exc)
+        return
+
+    for report in linked:
+        target = report_status_for(event.status, report.status)
+        if target is None:
+            continue
+        try:
+            await _save_and_broadcast(
+                report.model_copy(update={"status": target}), state, broadcaster
+            )
+            log.info("report %s → %s (event %s)", report.report_id, target, event.event_id)
+        except Exception as exc:
+            log.warning("could not advance report %s: %s", report.report_id, exc)
 
 
 async def _append_work_order_note(session: object, row: EventRow, patch: StatusPatch) -> None:

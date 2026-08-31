@@ -30,9 +30,14 @@ export const WS_URL: string =
  * correct for one second and leak for the rest of the session — the fetch
  * happens once, the socket runs for as long as the app is open.
  */
-export function wsUrlFor(audience: 'operator' | 'public'): string {
+export function wsUrlFor(audience: 'operator' | 'public', reporter?: string): string {
+  const params = new URLSearchParams({ audience });
+  // A public socket only receives report frames for the name it gives here,
+  // and none at all if it gives nothing. Enforced server-side — see
+  // routers/ws.py::_is_mine, including why name-matching is as weak as it is.
+  if (audience === 'public' && reporter) params.set('reporter', reporter);
   const separator = WS_URL.includes('?') ? '&' : '?';
-  return `${WS_URL}${separator}audience=${audience}`;
+  return `${WS_URL}${separator}${params.toString()}`;
 }
 
 export type ConnectionState = 'connecting' | 'open' | 'closed';

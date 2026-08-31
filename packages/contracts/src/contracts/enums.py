@@ -248,6 +248,11 @@ class WSMessageType(StrEnum):
     INCIDENT = "INCIDENT"
     #: a member of the public filed a report from the phone app (v1.2.0)
     REPORT_NEW = "REPORT_NEW"
+    #: a citizen report changed status or was linked to an event (v1.4.0).
+    #: Distinct from REPORT_NEW rather than an upsert: a consumer that only
+    #: cares about arrivals should not have to diff payloads to find out
+    #: whether it has seen this one before.
+    REPORT_UPDATED = "REPORT_UPDATED"
     #: an emergency crew accepted, dispatched to, or closed an incident (v1.3.0)
     INCIDENT_RESPONSE = "INCIDENT_RESPONSE"
     TICK = "TICK"
