@@ -161,7 +161,7 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
 | Central database | PostGIS on Postgres (`packages/db`) |
 | AI Intelligence Layer | `services/cloud/intelligence/urban_risk` (Urban Risk Index), `services/cloud/intelligence/recommend` (Maintenance Recommendation Engine), `services/cloud/intelligence/traffic_analytics` + `services/cloud/intelligence/whatif` (congestion / route delay), `services/edge/incidents/near_miss.py` (incident + near-miss severity) |
 | GIS & Digital Twin | `apps/web` — MapLibre + deck.gl over a committed PMTiles basemap, 3D twin at 45° pitch, road-health / congestion / risk-band layers |
-| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command console and the mobile view at `/field`. Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
+| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command console and, since T4, from the crew's phone in `apps/mobile` (Start inspection → Mark repaired, PATCHing the same endpoint the console does). Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
 | End users (RBAC) | All eight roles are built, in one app: `/app/:role`. The six operator roles get the desktop console; Citizen and Bus Driver get purpose-built phone-shaped screens |
 
 ### Role split (RBAC) — who the product is for
@@ -207,18 +207,24 @@ There is **one branch, `main`.** No checkout step, nothing to pick. Everyone
 commits to `main` and pulls with `--rebase` — see **CONTRIBUTING.md** for the
 daily loop and the before-you-push checklist.
 
-**One app, one port.** Everything is `http://localhost:5173`:
+**Two apps, one API.** The desk roles and the street roles are different
+programs because they are different jobs — web decides, phone acts — but they
+are clients of the same FastAPI process and the same `/ws/live` socket.
+Nothing goes phone → web directly.
 
 | what | where |
 |---|---|
 | Role picker (landing) | <http://localhost:5173/> |
 | A role — operator console | <http://localhost:5173/app/municipal-authority> |
-| Mobile view — embedded in the console's phone frame, and openable directly on a real phone | <http://localhost:5173/field> |
+| **The phone app** — Citizen · Road Maintenance · Bus Driver · Emergency Team | <http://localhost:5176> |
+| Phone-shaped view of the console (not the phone app) | <http://localhost:5173/field> |
 | API docs | <http://localhost:8000/docs> |
 
-`make dev` prints your laptop's LAN IP on startup. Open that from a phone on
-the same wifi and it's the same app, same code, same hot reload — no separate
-mobile build. The vite dev server binds `--host`, and the api's CORS policy
+In the one-container build (`make demo`, `make prod`) both are served from one
+port: the console at `/` and the phone app at `/m`.
+
+`make dev` prints your laptop's LAN IP on startup. Open `:5176` from a phone on
+the same wifi and you get the real thing, installable as a PWA. The vite dev server binds `--host`, and the api's CORS policy
 (`services/cloud/api/config.py`) allows any private-LAN origin, not just
 `localhost`.
 
@@ -533,8 +539,9 @@ so you are never blocked on your own merge conflicts.
 **Files you own**
 ```
 apps/web/src/{CommandApp,main}.tsx, components/**, lib/**, store/**, styles/**, test/**
-apps/web/src/field/**                          (the mobile app, at /field)
+apps/web/src/field/**                          (phone-shaped view of the console, at /field)
 apps/web/src/roles/**                          (the role shell + phone screens)
+apps/mobile/**                                 (the phone app — 4 field roles)
 scripts/fetch_buildings.py, scripts/gen_frontend_types.py
 ```
 You do **not** own `apps/web/src/panels/*` — those belong to M1–M4.
@@ -554,7 +561,7 @@ contained and routes itself to the right person.
 |---|---|
 | 1 | Map renders with buildings, routes, buses, events. All five panels mounting. `npm run test` green. |
 | 2 | WebSocket live and reconnecting. Buses interpolating smoothly between updates. |
-| 3 | `/field` on a real phone over wifi; PhoneFrame showing the same URL. |
+| 3 | `apps/mobile` on a real phone over wifi; PhoneFrame showing the same URL. |
 | 4 | Filters, event detail card, status write-back working end to end. |
 | 5 | Polish pass: transitions, empty states, loading states, the offline map fallback. |
 | 6 | Performance: 500+ events on the map without dropping frames. Real OSM buildings via `make buildings`. |
@@ -771,7 +778,7 @@ not affect `npm run build` output or anything you deploy.
 
 We are deliberately not bumping Vite mid-sprint — a major bundler upgrade on day
 3 of 7 is a worse risk than the advisory. Mitigation: the dev servers bind to
-your LAN (`--host`, which `/field` needs for phone testing), so do not run
+your LAN (`--host`, which `apps/mobile` needs for phone testing), so do not run
 `make dev` on untrusted wifi. Revisit after the hackathon.
 </details>
 
