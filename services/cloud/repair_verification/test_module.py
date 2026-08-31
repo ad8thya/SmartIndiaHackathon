@@ -247,6 +247,18 @@ def test_progress_reports_what_a_crew_needs_to_read() -> None:
 # to a repaired defect was 111 m.
 
 
+def test_bands_are_looked_up_by_place_not_by_route() -> None:
+    """Three routes run over EVR Periyar Salai and the network models them as
+    three segments 0 m apart. Taking only the event's own segment made
+    cross-route corroboration impossible on exactly the six segments where a
+    second bus exists."""
+    from services.cloud.repair_verification.tracker import progress_bands
+
+    bands = progress_bands("SEG-27B-003", 13.07795, 80.26820, 40.0)
+    routes = {route for route, _, _ in bands}
+    assert routes == {"27B", "570", "M1"}, f"expected three routes over this tarmac, got {routes}"
+
+
 def test_a_segment_maps_to_a_band_a_bus_cannot_jump_over() -> None:
     from services.cloud.repair_verification.tracker import progress_band
 
@@ -291,3 +303,45 @@ def test_a_fast_bus_still_registers_the_pass() -> None:
     tracked = v.progress_for(event.event_id.hex)
     assert tracked is not None
     assert tracked.clean_passes == 1
+
+
+def test_evidence_that_predates_the_repair_does_not_contradict_it() -> None:
+    """The clock trap, pinned.
+
+    Under replay the simulated clock runs hours ahead of wall time, so a
+    sighting recorded BEFORE a repair still has a `ts` in the wall-clock
+    future. Comparing against `datetime.now()` made every pre-repair
+    observation look like the defect being seen again, and the loop could
+    never close. The watermark is read from the observation stream itself, so
+    both sides use the same clock whatever that clock is doing.
+    """
+    v, event = verifier(), repaired_event()
+
+    # Two sightings on a clock running an hour ahead of wall time — but they
+    # are already in the buffer when tracking starts, so they are history.
+    ahead = NOW + timedelta(hours=1)
+    old = [
+        Observation(
+            obs_id=uuid4(),
+            bus_id=bus,
+            route_id="27B",
+            ts=ahead,
+            lat=LAT,
+            lon=LON,
+            gps_accuracy_m=4.0,
+            heading_deg=90.0,
+            speed_kmph=20.0,
+            detection_class=DetectionClass.POTHOLE,
+            raw_confidence=0.9,
+            severity=Severity.LARGE,
+        )
+        for bus in ("MTC-A-0001", "MTC-B-0002")
+    ]
+
+    # First sweep sets the watermark from those very observations.
+    v.observe(events=[event], bus_positions={}, recent_observations=old, now=NOW)
+    changed = drive_past(v, event, "MTC-C-0003", observations=old)
+
+    _, progress, _ = changed[-1]
+    assert progress.dirty_passes == 0, "evidence older than the repair must not contradict it"
+    assert progress.clean_passes == 1

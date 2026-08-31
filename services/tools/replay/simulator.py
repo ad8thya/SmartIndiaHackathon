@@ -43,6 +43,7 @@ from services.edge.pedestrian import get_pedestrian_detector
 
 from .clock import VirtualClock
 from .config import ReplaySettings, get_replay_settings
+from .repairs import RepairedPlaces
 
 log = logging.getLogger("urban-twin.replay")
 
@@ -157,6 +158,17 @@ class Simulator:
         # no factory to swap. See services/edge/incidents/near_miss.py.
         self.near_miss = MockNearMissDetector()
 
+        # The world model. A defect a crew has repaired is not on the road any
+        # more, so the simulator stops generating it — see repairs.py for why
+        # this belongs here and not in contracts.
+        self.repaired = RepairedPlaces(
+            api_base=settings.api_base,
+            radius_m=settings.REPLAY_REPAIR_RADIUS_M,
+            poll_seconds=settings.REPLAY_REPAIR_POLL_SECONDS,
+            enabled=settings.REPLAY_RESPECT_REPAIRS,
+        )
+        self.suppressed = 0
+
         self.published = 0
         self.observations_emitted = 0
         self.incidents_emitted = 0
@@ -229,7 +241,17 @@ class Simulator:
         self._emit(position_topic(bus.bus_id), position)
 
     def _run_perception(self, bus: SimulatedBus, meta: FrameMeta) -> None:
+        self.repaired.refresh()
+
         for observation in self._safely(self.defects.detect, None, meta, "defects"):
+            # The road was fixed. A real camera would simply not see anything
+            # here; the mock detector reads fixed hotspots and cannot know, so
+            # the world model filters it out on the way past.
+            if self.repaired.is_repaired(
+                observation.lat, observation.lon, str(observation.detection_class)
+            ):
+                self.suppressed += 1
+                continue
             self._emit(observation_topic(bus.bus_id), observation)
             self.observations_emitted += 1
 
@@ -273,6 +295,10 @@ class Simulator:
             "buses": len(self.buses),
             "messages": self.published,
             "observations": self.observations_emitted,
+            # Visible in the tick log so "the loop is not closing" and "the
+            # simulator never learned about the repair" are distinguishable
+            # without attaching a debugger.
+            "suppressed": self.suppressed,
             "incidents": self.incidents_emitted,
             "loops": self._loops_completed,
         }

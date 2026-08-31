@@ -82,11 +82,9 @@ def _segment_order() -> dict[str, list[str]]:
 
 
 def progress_band(road_segment_id: str | None) -> tuple[str, float, float] | None:
-    """Where along its route a segment sits, as (route_id, start, end).
+    """Where along its route one segment sits, as (route_id, start, end).
 
-    `SEG-M1-002` is the third of M1's five segments, so it occupies progress
-    0.4 to 0.6. Returns None for an unknown or absent segment, and the caller
-    falls back to the radius test.
+    `SEG-M1-002` is the third of M1's five, so it occupies progress 0.4-0.6.
     """
     if not road_segment_id:
         return None
@@ -96,7 +94,53 @@ def progress_band(road_segment_id: str | None) -> tuple[str, float, float] | Non
             return route_id, index / total, (index + 1) / total
     return None
 
+
+def progress_bands(
+    road_segment_id: str | None, lat: float, lon: float, radius_m: float
+) -> list[tuple[str, float, float]]:
+    """Every route's band that covers this patch of tarmac.
+
+    A band is per route, and that is not the same thing as a place. Three
+    routes run over `EVR Periyar Salai`, and the seeded network models them as
+    three separate segments — SEG-27B-003, SEG-570-003 and SEG-M1-001 — whose
+    centres are **0 m apart**. A bus on 570 driving over the exact stone the
+    27B pothole is in sits inside 570's band, not 27B's.
+
+    Taking only the event's own segment therefore made cross-route
+    corroboration impossible: every repair reached "clean passes from 1 bus"
+    and stopped, on precisely the six segments where a second bus does exist.
+    The band bought robustness against coarse sampling and quietly lost the
+    thing the two-bus rule needs.
+
+    So the bands are looked up by PLACE: every segment within `radius_m` of
+    the defect, whichever route it belongs to. Robust to sampling, and a bus
+    on any route over that tarmac now counts.
+    """
+    from citydata import SEGMENTS
+
+    bands: list[tuple[str, float, float]] = []
+    seen: set[str] = set()
+
+    for segment in SEGMENTS:
+        if segment.road_id != road_segment_id and (
+            haversine_m(lat, lon, segment.center[1], segment.center[0]) > radius_m
+        ):
+            continue
+        band = progress_band(segment.road_id)
+        if band is not None and band[0] not in seen:
+            seen.add(band[0])
+            bands.append(band)
+
+    return bands
+
 log = logging.getLogger("urban-twin.repair-verification")
+
+
+def _newest_ts(observations: list[object]) -> datetime | None:
+    """The latest timestamp in the buffer, on the buffer's own clock."""
+    stamps = [getattr(o, "ts", None) for o in observations]
+    real = [ts for ts in stamps if ts is not None]
+    return max(real) if real else None
 
 #: The rung a repair sits at while the fleet is being asked to confirm it.
 PENDING_STATUS = WorkflowStatus.REPAIR_COMPLETED
@@ -184,13 +228,20 @@ class RepairVerifier:
                     road_segment_id=event.road_segment_id,
                     confidence=event.fused_confidence,
                     pending_since=now,
+                    # The stream's own clock, not the wall clock. See the
+                    # field's docstring — this is the difference between "the
+                    # defect was seen again" and "the defect was seen before
+                    # the repair, on a clock that runs four hours fast".
+                    observations_watermark=_newest_ts(recent_observations),
                 )
                 self._progress[key] = progress
 
-            band = progress_band(event.road_segment_id)
+            bands = progress_bands(
+                event.road_segment_id, event.lat, event.lon, self.radius_m
+            )
 
             for bus_id, position in bus_positions.items():
-                inside_now = self._is_on_the_defect(event, position, band)
+                inside_now = self._is_on_the_defect(event, position, bands)
                 pair = (key, bus_id)
                 was_inside = pair in self._inside
 
@@ -207,7 +258,7 @@ class RepairVerifier:
                 progress.last_pass_at = now
 
                 seen_again = self._defect_corroborated_again(
-                    event, recent_observations, since=progress.pending_since
+                    event, recent_observations, since=progress.observations_watermark
                 )
                 if seen_again:
                     progress.dirty_passes += 1
@@ -249,20 +300,23 @@ class RepairVerifier:
         return changed
 
     def _is_on_the_defect(
-        self, event: Event, position: object, band: tuple[str, float, float] | None
+        self, event: Event, position: object, bands: list[tuple[str, float, float]]
     ) -> bool:
         """Is this bus currently on the stretch of road the defect is on?
 
-        Route-progress band when the event names a segment — a bus cannot jump
-        over a band the way it jumps over a 40 m circle. Distance to the point
-        only as a fallback, and only for events with no segment.
+        Any route's band over that tarmac counts — a bus cannot jump over a
+        band the way it jumps over a 40 m circle, and looking up bands by
+        place rather than by the event's own segment is what lets a second
+        route's bus corroborate. Distance to the point is the fallback, used
+        only when no segment covers the defect at all.
         """
-        if band is not None:
-            route_id, start, end = band
-            if getattr(position, "route_id", None) != route_id:
-                return False
+        if bands:
+            route_id = getattr(position, "route_id", None)
             progress = float(getattr(position, "progress", 0.0) or 0.0)
-            return start <= progress < end
+            return any(
+                route_id == band_route and start <= progress < end
+                for band_route, start, end in bands
+            )
 
         return (
             haversine_m(
@@ -291,7 +345,10 @@ class RepairVerifier:
         for observation in observations:
             if observation.detection_class is not event.detection_class:  # type: ignore[attr-defined]
                 continue
-            if since is not None and observation.ts < since:  # type: ignore[attr-defined]
+            # STRICTLY newer than the watermark. `<` would count the very
+            # observations the watermark was read from, so a repair would be
+            # contradicted by the last sighting before it.
+            if since is not None and observation.ts <= since:  # type: ignore[attr-defined]
                 continue
             if (
                 haversine_m(

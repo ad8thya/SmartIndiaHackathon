@@ -43,6 +43,17 @@ class VerificationProgress:
     #: confidence as it decays with each clean pass
     confidence: float = 1.0
     pending_since: datetime | None = None
+    #: The newest observation timestamp that existed when tracking started,
+    #: read from the OBSERVATION STREAM'S OWN CLOCK.
+    #:
+    #: Never compare an observation's `ts` to wall time. Under replay the
+    #: simulated clock runs hours ahead of the wall clock, so every
+    #: pre-repair sighting still in the buffer satisfies `ts >= now()` and
+    #: counts as the defect being seen again — the repair is contradicted by
+    #: evidence that predates it. routers/events.py documents the same trap
+    #: for `last_seen`. Comparing the stream against itself is clock-agnostic
+    #: and correct under both real and simulated time.
+    observations_watermark: datetime | None = None
     last_pass_at: datetime | None = None
     #: every bus that has driven past at all, clean or not
     buses_seen: set[str] = field(default_factory=set)
