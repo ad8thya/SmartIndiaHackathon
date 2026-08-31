@@ -124,8 +124,8 @@ export type Block =
 export const TONE_CHIP: Record<Tone, string> = {
   neutral: 'bg-ink/[0.06] text-ink-muted',
   accent: 'bg-accent/10 text-accent',
-  good: 'bg-emerald/12 text-emerald',
-  warn: 'bg-amber/12 text-amber',
+  good: 'bg-emerald/15 text-emerald',
+  warn: 'bg-amber/15 text-amber',
   bad: 'bg-danger/10 text-danger',
 };
 

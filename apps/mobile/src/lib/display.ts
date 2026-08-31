@@ -34,8 +34,8 @@ export function statusChipClass(status: WorkflowStatus): string {
   if (status === 'DETECTED' || status === 'REJECTED') return 'bg-ink/[0.06] text-ink-muted';
   if (status === 'AUTHORITY_NOTIFIED') return 'bg-danger/10 text-danger';
   if (status === 'REPAIR_COMPLETED' || status === 'VERIFIED' || status === 'RESOLVED')
-    return 'bg-emerald/12 text-emerald';
-  return 'bg-amber/12 text-amber';
+    return 'bg-emerald/15 text-emerald';
+  return 'bg-amber/15 text-amber';
 }
 
 /**
@@ -93,7 +93,7 @@ export const SEVERITY_HEX: Record<Severity, string> = {
 export function severityChipClass(severity: Severity): string {
   return {
     SMALL: 'bg-accent/10 text-accent',
-    MEDIUM: 'bg-amber/12 text-amber',
+    MEDIUM: 'bg-amber/15 text-amber',
     LARGE: 'bg-danger/10 text-danger',
   }[severity];
 }
@@ -158,10 +158,10 @@ export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
 };
 
 export function reportStatusChipClass(status: ReportStatus): string {
-  if (status === 'RESOLVED') return 'bg-emerald/12 text-emerald';
+  if (status === 'RESOLVED') return 'bg-emerald/15 text-emerald';
   if (status === 'REJECTED') return 'bg-ink/[0.06] text-ink-muted';
   if (status === 'SUBMITTED') return 'bg-accent/10 text-accent';
-  return 'bg-amber/12 text-amber';
+  return 'bg-amber/15 text-amber';
 }
 
 // ── time ────────────────────────────────────────────────────────────────────

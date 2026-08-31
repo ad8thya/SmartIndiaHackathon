@@ -44,7 +44,12 @@ interface SessionState {
 
 /**
  * "9840012345" → "9840 012345"; "priya.n" → "Priya N".
- * Cosmetic only — the raw identifier is what gets stored and sent.
+ *
+ * NOT cosmetic-only: `displayName` is what travels as `reporter_name` on a
+ * citizen report and what "My reports" filters by, so it is the identity the
+ * municipal operator sees. `identifier` is kept beside it as what the person
+ * actually typed. The two must stay consistent — filtering by one and sending
+ * the other would make every report invisible to the person who filed it.
  */
 function toDisplayName(identifier: string): string {
   const trimmed = identifier.trim();

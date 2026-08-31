@@ -34,7 +34,7 @@ export function OfflineBar() {
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          className="z-20 flex-none overflow-hidden bg-amber/12"
+          className="z-20 flex-none overflow-hidden bg-amber/15"
           role="status"
         >
           <div className="flex items-center gap-2 px-4 py-2">

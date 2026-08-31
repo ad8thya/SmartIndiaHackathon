@@ -270,8 +270,16 @@ export function ReportScreen() {
             aria-label="Address"
             className="ut-touch mt-3 w-full rounded-[10px] border border-line bg-canvas px-3 py-2.5 text-[14px] outline-none focus:border-accent"
           />
+          {/* The caption has to describe what actually happened. Claiming a
+              value was filled in from a nearby road while the field sits empty
+              — which is what this said before the geocoder's radius was fixed
+              — reads as the app being broken, and correctly so. */}
           <p className="mt-1.5 text-[11px] leading-snug text-ink-faint">
-            Filled in from the nearest road we know about — it is a landmark, not an exact address.
+            {place
+              ? 'Filled in from the nearest road we know about — a landmark, not an exact address.'
+              : geo.status === 'ok'
+                ? 'We could not match a nearby street. Type a landmark so the crew can find it.'
+                : 'Add your location, or type a landmark.'}
           </p>
         </div>
       </Section>

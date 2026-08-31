@@ -120,7 +120,11 @@ export function EmergencyAlertsScreen() {
                 </span>
               </div>
 
-              <h2 className="mt-2 text-[20px] font-medium leading-snug tracking-[-0.3px]">
+              {/* Clamped to three lines. The dossier narrative runs to a
+                  paragraph, and on a screen read standing up the first thing
+                  that must be reachable is Accept — not the ninth line of
+                  prose. The full text is on the incident, one tap away. */}
+              <h2 className="mt-2 line-clamp-3 text-[20px] font-medium leading-snug tracking-[-0.3px]">
                 {incident.narrative}
               </h2>
 

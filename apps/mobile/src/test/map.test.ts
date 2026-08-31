@@ -12,6 +12,7 @@ import { buildMapStyle } from '../lib/mapStyle';
 import { INITIAL_VIEW } from '../lib/mapView';
 import { isPublic, PUBLIC_STATUSES, STATUS_HEX } from '../lib/display';
 import { toPublicEvent } from '../lib/useEvents';
+import { reverseGeocode } from '../lib/geocode';
 import { WORKFLOW_ORDER } from '../lib/types';
 
 const ROOT = resolve(__dirname, '../..');
@@ -114,5 +115,32 @@ describe('the citizen privacy filter', () => {
     for (const status of WORKFLOW_ORDER) {
       expect(STATUS_HEX[status]).toMatch(/^#[0-9A-Fa-f]{6}$/);
     }
+  });
+});
+
+describe('offline reverse geocoding', () => {
+  it('names a street at points across the seeded network', () => {
+    // The radius started at 1.2 km and SEGMENTS holds segment *midpoints*, so
+    // a phone standing on a road is routinely further than that from the road's
+    // own centre. The result was a geocoder that returned null nearly
+    // everywhere while the UI captioned the empty field "filled in from the
+    // nearest road". These are real Chennai points inside the seeded extent.
+    const points = [
+      { name: 'test fixture location', lat: 13.0067, lon: 80.257 },
+      { name: 'Chennai Central', lat: 13.0827, lon: 80.2707 },
+      { name: 'Adyar', lat: 13.0012, lon: 80.2565 },
+    ];
+
+    for (const point of points) {
+      const place = reverseGeocode(point.lat, point.lon);
+      expect(place, `no street found near ${point.name}`).not.toBeNull();
+      expect(place?.address).toMatch(/^Near /);
+      expect(place?.ward).toMatch(/^Route /);
+    }
+  });
+
+  it('still refuses to name a street from far outside the network', () => {
+    // Bengaluru. Naming a Chennai road here would be worse than saying nothing.
+    expect(reverseGeocode(12.9716, 77.5946)).toBeNull();
   });
 });

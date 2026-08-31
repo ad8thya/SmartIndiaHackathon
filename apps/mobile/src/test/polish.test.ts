@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 
 const SRC = resolve(__dirname, '..');
@@ -81,6 +81,46 @@ describe('motion', () => {
   it('respects prefers-reduced-motion', () => {
     const css = ALL.find((file) => file.path === 'styles/index.css')?.text ?? '';
     expect(css).toContain('prefers-reduced-motion');
+  });
+});
+
+describe('every utility class actually generates CSS', () => {
+  /**
+   * Tailwind's opacity modifier only accepts values from its scale (5, 10, 15,
+   * 20, …) or explicit bracket syntax. `bg-emerald/13` is neither, so it
+   * silently emits NOTHING — no error, no warning, no rule. Four of those
+   * shipped: every role's tint square and several chips rendered with no
+   * background at all, and it took a screenshot to notice.
+   *
+   * This reads the built stylesheet, so it needs `npm run build` to have run.
+   * When dist is absent it skips rather than failing, because a fresh clone
+   * running `npm test` before a build should not see a red herring.
+   */
+  const dist = resolve(SRC, '../dist/assets');
+  const built = existsSync(dist)
+    ? readdirSync(dist)
+        .filter((f) => f.endsWith('.css'))
+        .map((f) => readFileSync(join(dist, f), 'utf8'))
+        .join('')
+    : null;
+
+  it.skipIf(built === null)('emits a rule for every colour/opacity pair used', () => {
+    const used = new Set<string>();
+    for (const file of ALL) {
+      for (const match of file.text.matchAll(
+        /\b((?:bg|text|border|fill|ring)-[a-z-]+\/\d+)\b/g,
+      )) {
+        used.add(match[1]);
+      }
+    }
+
+    const dead = [...used].filter((cls) => {
+      const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('/', '\\\\/');
+      return !new RegExp(`\\.${escaped}[{\\s,:]`).test(built ?? '');
+    });
+
+    expect(dead).toEqual([]);
+    expect(used.size).toBeGreaterThan(5);
   });
 });
 

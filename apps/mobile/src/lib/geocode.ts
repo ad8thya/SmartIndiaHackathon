@@ -31,11 +31,20 @@ export interface Place {
 }
 
 /**
- * Past this, "near <street>" is no longer a useful description — the nearest
- * seeded segment could be a different neighbourhood. 1.2 km is roughly the
- * spacing of the seeded network.
+ * Past this, "near <street>" stops being a useful description — the nearest
+ * seeded segment is a different neighbourhood and naming it would mislead.
+ *
+ * 3 km, not the 1.2 km this started at. `SEGMENTS` carries segment *midpoints*,
+ * not road geometry, so a phone standing on a road is routinely 2 km from that
+ * road's own centre point — a 4 km corridor's midpoint is 2 km from either end.
+ * At 1.2 km the geocoder returned null across most of the seeded network and
+ * the address field just stayed empty, under a caption claiming it had been
+ * filled in.
+ *
+ * If `SEGMENTS` ever carries real polylines, this should become a
+ * distance-to-line and the threshold should come back down.
  */
-const TOO_FAR_M = 1_200;
+const TOO_FAR_M = 3_000;
 
 export function reverseGeocode(lat: number, lon: number): Place | null {
   if (SEGMENTS.length === 0) return null;

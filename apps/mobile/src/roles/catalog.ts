@@ -87,7 +87,7 @@ export const MOBILE_ROLES: Record<MobileRoleId, MobileRole> = {
     initials: 'CZ',
     tagline: 'Report a hazard, track the fix',
     icon: User,
-    tint: { bg: 'bg-emerald/12', fg: 'text-emerald' },
+    tint: { bg: 'bg-emerald/15', fg: 'text-emerald' },
     prefix: '/citizen',
     tabs: [
       { to: '/citizen', label: 'Home', icon: Home },
@@ -100,7 +100,7 @@ export const MOBILE_ROLES: Record<MobileRoleId, MobileRole> = {
       'Report a road hazard with a photo and your location',
       'Track what happened to the reports you sent',
       'See confirmed road conditions near you on a map',
-      'Read alerts for your ward',
+      'Read alerts about roads near you',
     ],
   },
   'road-maintenance': {
@@ -109,7 +109,7 @@ export const MOBILE_ROLES: Record<MobileRoleId, MobileRole> = {
     initials: 'RM',
     tagline: 'Work the queue, close the order',
     icon: Wrench,
-    tint: { bg: 'bg-amber/12', fg: 'text-amber' },
+    tint: { bg: 'bg-amber/15', fg: 'text-amber' },
     prefix: '/crew',
     tabs: [
       { to: '/crew', label: 'My queue', icon: ClipboardList },
@@ -129,7 +129,7 @@ export const MOBILE_ROLES: Record<MobileRoleId, MobileRole> = {
     initials: 'BD',
     tagline: 'Your bus, your cameras, your route',
     icon: Bus,
-    tint: { bg: 'bg-accent/12', fg: 'text-accent' },
+    tint: { bg: 'bg-accent/15', fg: 'text-accent' },
     prefix: '/bus',
     tabs: [
       { to: '/bus', label: 'My bus', icon: Bus },
@@ -148,7 +148,7 @@ export const MOBILE_ROLES: Record<MobileRoleId, MobileRole> = {
     initials: 'ER',
     tagline: 'Accept, dispatch, close',
     icon: Ambulance,
-    tint: { bg: 'bg-danger/12', fg: 'text-danger' },
+    tint: { bg: 'bg-danger/15', fg: 'text-danger' },
     prefix: '/emergency',
     tabs: [
       { to: '/emergency', label: 'Alerts', icon: Siren },
