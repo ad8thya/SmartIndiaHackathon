@@ -5,10 +5,11 @@ The frontend used to carry three hand-mirrored copies of the contract types
 §5). This script replaces all of them with a single generated file, produced by
 introspecting the actual pydantic models and StrEnums in `contracts`.
 
-It writes the *same* file into every app in `APPS`. apps/mobile is a second
-client of the same API, so it gets the same generated types rather than a
-hand-written mirror — the drift that caused the original bug does not care
-which folder the fourth copy lives in.
+It writes the same file into every app in `APPS`, and also emits an npm
+package under `dist/contracts/` for consumers outside this repo — the desktop
+console, which now lives in its own repository, installs that rather than
+copying `types.ts`. Hand-copying is exactly how three divergent mirrors
+happened the first time; see `publish_npm_package`.
 
 Run:  .venv/bin/python scripts/gen_frontend_types.py
 It is deterministic; CI can diff the output against the committed files.
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import datetime
 import enum
+import json
 import types
 import typing
 import uuid
@@ -29,10 +31,18 @@ from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parent.parent
 
+#: Where the npm package for out-of-repo consumers is written. Not committed;
+#: `make types` regenerates it and CI publishes it.
+NPM_OUT = ROOT / "dist/contracts"
+NPM_NAME = "@urban-twin/contracts"
+
+#: The single source of the version number for everything this script emits.
+VERSION = getattr(contracts, "__version__", "0.0.0")
+
 #: Every frontend that consumes the contracts. Adding one here is all it takes
 #: to keep it in sync — there is deliberately no way to generate for one app
 #: and not the others.
-APPS = ("apps/web", "apps/mobile")
+APPS = ("apps/mobile",)
 
 # contracts names that collide with DOM/global names in TS land
 RENAME = {"Event": "UTEvent", "Route": "UTRoute"}
@@ -278,8 +288,13 @@ def main() -> None:
         "/**\n"
         " * GENERATED from packages/contracts — do not edit by hand.\n"
         " * Regenerate with:  .venv/bin/python scripts/gen_frontend_types.py\n"
-        f" * contracts version: {getattr(contracts, '__version__', 'unknown')}\n"
+        f" * contracts version: {VERSION}\n"
         " */\n",
+        # Exported, not only commented: a comment cannot be compared at
+        # runtime. `scripts/check_contracts_version.py` reads this and the
+        # API's /health and fails when they disagree — the guard against a
+        # stale hand-copied types.ts.
+        f'export const CONTRACTS_VERSION = "{VERSION}";\n',
     ]
     parts += [emit_enum(e) for e in ENUMS]
     parts.append(class_list("INFRASTRUCTURE_CLASSES", contract_enums.INFRASTRUCTURE_CLASSES))
@@ -295,6 +310,89 @@ def main() -> None:
         print(f"wrote {out.relative_to(ROOT)}")
 
     write_city_ref()
+    write_npm_package(body)
+
+
+def write_npm_package(body: str) -> None:
+    """Emit `dist/contracts/` as an installable npm package.
+
+    THIS IS THE POINT OF THE WHOLE FILE, for anyone outside this repo.
+
+    In-repo apps get `types.ts` written straight into their `src/lib/`. The
+    desktop console does not live here any more, and the tempting thing for it
+    to do is copy that file across once and move on. That is precisely how this
+    project ended up with three divergent hand-mirrored copies of the contract
+    types and a bug that took a day to find (BUILD.md §5).
+
+    So the out-of-repo path is `npm install @urban-twin/contracts`, versioned
+    off `contracts.__version__`, with `CONTRACTS_VERSION` exported from the
+    bundle so a consumer can assert at runtime that what it compiled against is
+    what the API is actually serving. `scripts/check_contracts_version.py` does
+    exactly that, and CI runs it.
+
+    The package is `.d.ts` + an empty `.js`: every export here is either a type
+    or a `const` of literal data, so there is nothing to execute — but npm
+    consumers still expect a `main`, and omitting it makes bundlers complain.
+    """
+    NPM_OUT.mkdir(parents=True, exist_ok=True)
+
+    (NPM_OUT / "index.d.ts").write_text(body)
+    (NPM_OUT / "index.js").write_text(
+        f'// Generated from packages/contracts {VERSION}. Types are erased at\n'
+        f'// build time; the version is here so it survives into runtime.\n'
+        f'export const CONTRACTS_VERSION = "{VERSION}";\n'
+    )
+    (NPM_OUT / "package.json").write_text(
+        json.dumps(
+            {
+                "name": NPM_NAME,
+                "version": VERSION,
+                "description": (
+                    "Generated TypeScript for the URBAN TWIN wire contracts. "
+                    "Do not edit — regenerate from packages/contracts."
+                ),
+                "type": "module",
+                "main": "index.js",
+                "types": "index.d.ts",
+                "files": ["index.js", "index.d.ts", "README.md"],
+                "publishConfig": {"access": "restricted"},
+                "license": "UNLICENSED",
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    (NPM_OUT / "README.md").write_text(
+        f"""# {NPM_NAME}
+
+Generated from `packages/contracts` **{VERSION}** in the URBAN TWIN API repo.
+Do not edit, and do not copy `index.d.ts` into your source tree — install it.
+
+```
+npm install {NPM_NAME}
+```
+
+```ts
+import type {{ UTEvent, CitizenReport }} from '{NPM_NAME}';
+import {{ CONTRACTS_VERSION }} from '{NPM_NAME}';
+```
+
+## Check you match the API
+
+The API reports the contracts version it was built against at `GET /health`
+as `contracts_version`. If that differs from `CONTRACTS_VERSION` here, your
+client and the server disagree about the wire format — which is silent until
+it is a production bug.
+
+```
+python scripts/check_contracts_version.py --api https://your-api/health
+```
+
+Run it in CI. That check is the reason this package exists rather than a
+copied file.
+"""
+    )
+    print(f"wrote {NPM_OUT.relative_to(ROOT)}/ ({NPM_NAME}@{VERSION})")
 
 
 if __name__ == "__main__":

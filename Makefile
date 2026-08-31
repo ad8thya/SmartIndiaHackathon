@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
-.PHONY: help setup dev demo prod down logs migrate revision seed smoke test test-py test-js fmt lint typecheck mine up up-full reset buildings types clean
+.PHONY: help setup dev demo prod down logs migrate revision seed smoke test test-py test-js fmt lint typecheck mine up up-full reset types contracts-check clean
 
 # prefer 3.11/3.12 — some geo/ML wheels lag on the newest interpreter
 PYTHON_BIN := $(shell command -v python3.11 || command -v python3.12 || command -v python3)
@@ -34,7 +34,6 @@ setup: ## create venv, install python + node deps, generate .env if missing
 	$(PIP) install -e ".[dev]" -q
 	echo "→ python core installed. Perception owners (M1/M3/M4): $(PIP) install -e '.[ml]'"
 	echo "→ traffic owner (M2):                                   $(PIP) install -e '.[geo]'"
-	cd apps/web && npm install --silent
 	cd apps/mobile && npm install --silent
 	echo ""
 	echo "  ✔ setup complete →  make dev"
@@ -77,9 +76,6 @@ revision: ## autogenerate a migration:  make revision m="add work orders"
 seed: ## load 6 Chennai routes, 6 buses, 3 school zones, ~40 events
 	$(PY) scripts/seed.py
 
-buildings: ## re-fetch OSM building footprints for the 3D twin (needs network)
-	$(PY) scripts/fetch_buildings.py --tagged-only
-
 types: ## regenerate the frontend's contract types from packages/contracts
 	$(PY) scripts/gen_frontend_types.py
 
@@ -92,8 +88,7 @@ test: test-py test-js ## run everything
 test-py: ## all python tests
 	$(PYTEST)
 
-test-js: ## frontend unit tests (both apps)
-	cd apps/web && npm run test -- --run
+test-js: ## frontend unit tests
 	cd apps/mobile && npm run test -- --run
 
 mine: ## run ONLY your module's tests (reads .member, or MEMBER=m3)
@@ -102,6 +97,9 @@ mine: ## run ONLY your module's tests (reads .member, or MEMBER=m3)
 fmt: ## format + autofix
 	$(RUFF) format .
 	$(RUFF) check --fix .
+
+contracts-check: ## fail if generated types drift from packages/contracts
+	$(PY) scripts/check_contracts_version.py $(if $(API),--api $(API),)
 
 lint: ## lint without fixing
 	$(RUFF) check .

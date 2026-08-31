@@ -1,6 +1,6 @@
 /**
  * Tokens transcribed from the design canvas export (`Frontend1.zip` →
- * `index1.html`), not invented here. Where the design and apps/web disagree
+ * `index1.html`), not invented here. Where the design and the console disagree
  * the design wins, because this app is a rebuild of that comp — see
  * apps/mobile/README.md § Palette for the one place they differ.
  *

@@ -6,7 +6,7 @@
  * a second source of truth is how the console and the phone would come to
  * disagree about whether a repair is done.
  *
- * `MY_TEAM` is hardcoded, exactly like apps/web's field view. It is the one
+ * `MY_TEAM` is hardcoded, exactly like the console's old field view. It is the one
  * piece of "identity" a crew has, and with no auth (store/session.ts) there is
  * nothing to derive it from. Written down here rather than spread across
  * screens, so the day real auth arrives there is one line to change.

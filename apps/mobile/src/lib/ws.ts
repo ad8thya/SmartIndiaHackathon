@@ -1,6 +1,6 @@
 /**
  * The app's one WebSocket. Same envelope and same reconnect policy as
- * apps/web's client, with two additions a phone needs and a desktop does not.
+ * the console's client, with two additions a phone needs and a desktop does not.
  *
  * **Jitter.** A depot full of crew phones on the same wifi all lose the API at
  * the same moment when it restarts, and a fixed backoff makes them all retry

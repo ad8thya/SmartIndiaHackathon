@@ -32,9 +32,19 @@ class ApiSettings(BaseSettings):
     WEB_DIST: str | None = None
 
     #: Same, for apps/mobile. It is mounted under /m rather than / because
-    #: apps/web owns the root in the one-container deployment — the mobile
+    #: `/` is left free for a console build (WEB_DIST) — the mobile
     #: build is produced with `VITE_BASE=/m/` to match.
     MOBILE_DIST: str | None = None
+
+    #: Where the offline basemap lives: the pmtiles extract, its glyphs and its
+    #: sprites. Served at `/map` unconditionally — NOT off `WEB_DIST`.
+    #:
+    #: It used to be part of apps/web's build output, which meant the phone
+    #: app's map depended on the desktop app being deployed. Two clients read
+    #: this and neither owns it, so it is a repo-level asset with its own
+    #: setting. Relative paths resolve from the process working directory,
+    #: which is the repo root under `make dev` and `/app` in the container.
+    MAP_DIR: str = "assets/map"
 
     #: Where citizen report photos are written. Files, not rows: a base64
     #: data URI in the table would ride along in every list response and in

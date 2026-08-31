@@ -9,22 +9,22 @@ PYTEST=.venv/bin/pytest
 case "$MEMBER" in
   m1) NAME="M1 · Road Defects"
       PATHS="services/edge/defects"
-      FILES="apps/web/src/panels/DefectsPanel.tsx" ;;
+      FILES="(moved to the console repo)" ;;
   m2) NAME="M2 · Traffic + What-If + Recommendations"
       PATHS="services/cloud/intelligence/traffic_analytics services/cloud/intelligence/whatif services/cloud/intelligence/recommend"
-      FILES="apps/web/src/panels/TrafficPanel.tsx apps/web/src/panels/WhatIfPanel.tsx apps/web/src/panels/IntelligencePanel.tsx (contributes)" ;;
+      FILES="(moved to the console repo)" ;;
   m3) NAME="M3 · Pedestrian + Fusion + Urban Risk Index"
       PATHS="services/edge/pedestrian services/cloud/consensus services/cloud/intelligence/urban_risk"
-      FILES="apps/web/src/panels/RiskPanel.tsx apps/web/src/panels/IntelligencePanel.tsx" ;;
+      FILES="(moved to the console repo)" ;;
   m4) NAME="M4 · Incidents / ANPR"
       PATHS="services/edge/incidents"
-      FILES="apps/web/src/panels/IncidentsPanel.tsx" ;;
+      FILES="(moved to the console repo)" ;;
   m5) NAME="M5 · Platform"
       PATHS="services/cloud/api packages/db scripts"
       FILES="(no panel — you own the API surface everyone calls)" ;;
   m6) NAME="M6 · Frontend / Twin"
       PATHS="packages/contracts"
-      FILES="apps/web/src (shell, map, layout, field + roles screens)" ;;
+      FILES="(moved to the console repo)" ;;
   all)
       echo "  no member set — running everything."
       echo "  to run only your module:   echo m3 > .member    (or  MEMBER=m3 make mine)"
@@ -38,7 +38,7 @@ echo "    $FILES"
 echo ""
 
 if [ "$MEMBER" = "m6" ]; then
-  echo "  → your tests are mostly frontend:  cd apps/web && npm run test"
+  echo "  → your tests are mostly frontend:  cd apps/mobile && npm run test"
   echo ""
 fi
 exec $PYTEST $PATHS

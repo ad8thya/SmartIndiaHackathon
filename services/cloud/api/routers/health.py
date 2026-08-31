@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+import contracts
 from contracts import HealthStatus
 from fastapi import APIRouter
 from sqlalchemy import text
@@ -21,6 +22,13 @@ async def health(settings: Settings, state: State) -> HealthStatus:
     database, postgis = await _check_postgres(detail)
     redis_ok = await _check_redis(settings.REDIS_URL, detail)
     mqtt_ok = _check_mqtt(detail)
+
+    # The wire-contract version this API was built against. Clients compare it
+    # to the `CONTRACTS_VERSION` they compiled with — see
+    # scripts/check_contracts_version.py. It goes in `detail` rather than as a
+    # new HealthStatus field because contracts is frozen and this needs no
+    # amendment to work; `version` above is the app's, not the schema's.
+    detail["contracts_version"] = getattr(contracts, "__version__", "unknown")
 
     detail["buses_tracked"] = str(len(state.buses))
     detail["events_cached"] = str(len(state.events))

@@ -71,14 +71,39 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: apps/mobile/package-lock.json
 
       - run: npm ci
-        working-directory: apps/web
+        working-directory: apps/mobile
       - run: npx tsc -b
-        working-directory: apps/web
+        working-directory: apps/mobile
       - run: npm run build
-        working-directory: apps/web
+        working-directory: apps/mobile
       - name: tests
         run: npm run test -- --run
-        working-directory: apps/web
+        working-directory: apps/mobile
+
+  # The guard against a hand-copied types.ts. The console lives in its own
+  # repository and installs @urban-twin/contracts; nothing physically stops
+  # someone copying the generated file across instead, and a copy does not
+  # announce itself — it works until the schema moves and one side does not.
+  # This regenerates and fails if anything drifted. See BUILD.md §5.
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -e packages/contracts -e packages/citydata
+      - name: regenerate contract types
+        run: python scripts/gen_frontend_types.py
+      - name: versions agree
+        run: python scripts/check_contracts_version.py
+      - name: generated types are committed and current
+        run: |
+          if ! git diff --quiet -- apps/mobile/src/lib/types.ts apps/mobile/src/lib/cityRef.ts; then
+            echo "::error::generated types are stale — run \`make types\` and commit the result"
+            git --no-pager diff --stat -- apps/mobile/src/lib
+            exit 1
+          fi

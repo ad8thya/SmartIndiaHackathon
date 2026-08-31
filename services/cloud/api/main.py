@@ -26,7 +26,7 @@ from .fusion_loop import FusionLoop
 from .hub import Repeater, broadcaster, state
 from .mqtt_bridge import MqttBridge
 from .routers import ALL_ROUTERS
-from .spa import find_dist, mount_mobile, mount_spa
+from .spa import find_dist, mount_map, mount_mobile, mount_spa
 
 settings = get_api_settings()
 logging.basicConfig(
@@ -105,10 +105,14 @@ for router in ALL_ROUTERS:
     app.include_router(router)
 
 
+# The basemap first, and unconditionally. It belongs to no frontend — see
+# spa.py::mount_map — so it must not depend on either dist existing.
+mount_map(app, settings.MAP_DIR)
+
 _web_dist = find_dist(settings.WEB_DIST)
 _mobile_dist = find_dist(settings.MOBILE_DIST, container_path="/app/mobile")
 
-# The mobile app claims /m before apps/web claims everything else. Order is
+# The mobile app claims /m before any SPA claims everything else. Order is
 # load-bearing: mount_spa's catch-all matches every path there is.
 if _mobile_dist is not None:
     mount_mobile(app, _mobile_dist)

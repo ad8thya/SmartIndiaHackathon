@@ -1,7 +1,7 @@
 /**
  * Typed HTTP client for the mobile app.
  *
- * Same contract as apps/web's client and same origin-resolution rule — the two
+ * Same contract as the console's client and same origin-resolution rule — the two
  * apps are separate builds talking to one API, so the one thing they must not
  * disagree about is where that API is. Nothing outside this file calls `fetch`.
  */

@@ -367,7 +367,7 @@ def check_api(report: Report) -> None:
 def check_frontend(report: Report) -> None:
     section("frontend")
     root = Path(__file__).resolve().parents[1]
-    for app_dir in ("apps/web", "apps/mobile"):
+    for app_dir in ("apps/mobile",):
         installed = (root / app_dir / "node_modules").is_dir()
         report.add(
             f"{app_dir} dependencies installed",
@@ -376,44 +376,52 @@ def check_frontend(report: Report) -> None:
             required=False,
         )
 
-    # Both apps read the same generated contract types. If they ever differ,
-    # one of them was edited by hand — which is the exact bug the generator
-    # exists to prevent (BUILD.md §5), so it is worth a red line here.
-    web_types = root / "apps/web/src/lib/types.ts"
-    mobile_types = root / "apps/mobile/src/lib/types.ts"
-    if web_types.is_file() and mobile_types.is_file():
-        same = web_types.read_text() == mobile_types.read_text()
+    # The generated types must match the contracts package they came from.
+    # There is only one in-repo consumer now, but the console lives in another
+    # repository and installs @urban-twin/contracts — a stale copy there is
+    # the same bug (BUILD.md §5) with a longer feedback loop, so the version
+    # stamp is checked here and by scripts/check_contracts_version.py in CI.
+    import re as _re
+
+    types_file = root / "apps/mobile/src/lib/types.ts"
+    if types_file.is_file():
+        match = _re.search(
+            r'export const CONTRACTS_VERSION\s*=\s*["\']([^"\']+)["\']',
+            types_file.read_text(),
+        )
+        stamped = match.group(1) if match else None
+        import contracts as _contracts
+
+        actual = getattr(_contracts, "__version__", None)
         report.add(
-            "contract types identical across both apps",
-            same,
-            "" if same else "run `make types` — one of them has drifted",
+            "generated types match packages/contracts",
+            stamped is not None and stamped == actual,
+            f"types.ts says {stamped}, contracts is {actual}"
+            if stamped != actual
+            else f"v{actual}",
         )
     else:
-        report.add(
-            "contract types generated for both apps",
-            False,
-            "run `make types`",
-        )
+        report.add("contract types generated", False, "run `make types`")
 
-    # The mobile app deliberately ships no basemap of its own; it reads this
-    # one, through a symlink in dev and the shared origin in production.
-    basemap = root / "apps/mobile/public/map/chennai.pmtiles"
+    # The basemap belongs to no app: it lives at assets/map, the API serves it
+    # at /map from MAP_DIR, and each frontend symlinks it for its dev server.
+    basemap = root / "assets/map/chennai.pmtiles"
+    report.add(
+        "basemap present at assets/map",
+        basemap.is_file(),
+        f"{basemap.stat().st_size // (1024 * 1024)} MB"
+        if basemap.is_file()
+        else "assets/map/chennai.pmtiles is missing",
+    )
+
+    link = root / "apps/mobile/public/map"
     report.add(
         "mobile basemap symlink resolves",
-        basemap.is_file(),
-        f"{basemap.stat().st_size // (1024 * 1024)} MB (shared with apps/web)"
-        if basemap.is_file()
-        else "apps/mobile/public/map is dangling",
+        (link / "chennai.pmtiles").is_file(),
+        "→ assets/map" if (link / "chennai.pmtiles").is_file() else "dangling symlink",
         required=False,
     )
 
-    buildings = root / "apps/web/public/data/buildings.geojson"
-    report.add(
-        "3D building footprints cached",
-        buildings.is_file(),
-        f"{buildings.stat().st_size // 1024} KB" if buildings.is_file() else "run `make buildings`",
-        required=False,
-    )
 
 
 # ── main ────────────────────────────────────────────────────────────────────

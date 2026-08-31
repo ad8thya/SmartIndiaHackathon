@@ -1,34 +1,23 @@
 # ─────────────────────────────────────────────────────────────────────────────
-#  URBAN TWIN — one image, one port, API + both UIs.
+#  URBAN TWIN — one image, one port, API + the phone app.
 #
-#  Stages 1 and 2 build apps/web and apps/mobile with vite. Stage 3 installs
-#  the python side and copies both builds in, so FastAPI serves the static
-#  files itself (see services/cloud/api/spa.py). No nginx, no second
-#  container, no CORS: the UIs and the API are the same origin.
+#  Stage 1 builds apps/mobile with vite. Stage 2 installs the python side and
+#  copies the build in, so FastAPI serves the static files itself (see
+#  services/cloud/api/spa.py). No nginx, no second container, no CORS: the UI
+#  and the API are the same origin.
 #
-#      apps/web    → /        the desktop command console
 #      apps/mobile → /m       the phone app
+#      assets/map  → /map     the offline basemap, mounted unconditionally
+#
+#  The desktop console moved to its own repository. `WEB_DIST` still exists
+#  and still works — point it at a console build and it is served at `/` — but
+#  nothing in this image provides one.
 #
 #      docker build -f infra/Dockerfile -t urban-twin .
 #      docker run -p 8000:8000 urban-twin
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── stage 1: the desktop frontend ────────────────────────────────────────────
-FROM node:20-slim AS web
-
-WORKDIR /web
-COPY apps/web/package.json apps/web/package-lock.json* ./
-RUN npm ci --no-audit --no-fund
-
-COPY apps/web/ ./
-# Same-origin in production: the app derives the API base from
-# window.location, so there is deliberately no VITE_API_BASE_URL baked in here.
-# Set one at build time only when the API lives on a different host.
-ARG VITE_API_BASE_URL
-ARG VITE_WS_URL
-RUN npm run build
-
-# ── stage 2: the mobile frontend ─────────────────────────────────────────────
+# ── stage 1: the phone app ───────────────────────────────────────────────────
 FROM node:20-slim AS mobile
 
 WORKDIR /mobile
@@ -36,10 +25,10 @@ COPY apps/mobile/package.json apps/mobile/package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 
 COPY apps/mobile/ ./
-# public/map is a symlink into apps/web, which is not in this build context.
-# The build drops dist/map anyway (the mobile app reads apps/web's basemap at
-# the shared origin), but a dangling symlink would break the publicDir copy
-# before it got that far.
+# public/map is a symlink to ../../../assets/map, which is outside this build
+# context. The build drops dist/map anyway — the API serves /map from MAP_DIR
+# — but a dangling symlink would break vite's publicDir copy before it got
+# that far.
 RUN rm -f public/map
 
 ARG VITE_API_BASE_URL
@@ -49,7 +38,7 @@ ARG VITE_WS_URL
 ENV VITE_BASE=/m/
 RUN npm run build
 
-# ── stage 3: the API, serving both builds ────────────────────────────────────
+# ── stage 2: the API, serving that build and the basemap ─────────────────────
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
@@ -68,11 +57,13 @@ COPY scripts ./scripts
 # and pulling torch into the demo image would add gigabytes for nothing
 RUN pip install --upgrade pip && pip install -e .
 
-# the built UIs. spa.py looks in both places first, so no configuration is
-# needed. /app/mobile carries no basemap — it reads /map, which is served from
-# /app/web's copy.
-COPY --from=web /web/dist /app/web
+# The built phone app. spa.py finds it at /app/mobile with no configuration.
 COPY --from=mobile /mobile/dist /app/mobile
+
+# The basemap, as its own layer. 17 MB that changes about never, so a code
+# change must not invalidate it. `/app/assets/map` is MAP_DIR's default,
+# relative to WORKDIR.
+COPY assets ./assets
 
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=10 \

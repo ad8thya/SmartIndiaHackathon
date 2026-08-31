@@ -57,3 +57,6 @@ apps/web/dist/
 
 # `make mine` — which module you own (per-person, not shared)
 .member
+
+# generated npm package for out-of-repo contract consumers
+dist/contracts/

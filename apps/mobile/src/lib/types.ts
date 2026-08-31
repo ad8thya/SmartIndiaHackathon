@@ -4,6 +4,8 @@
  * contracts version: 1.3.0
  */
 
+export const CONTRACTS_VERSION = "1.3.0";
+
 export type DetectionClass =
   | 'POTHOLE'
   | 'LONGITUDINAL_CRACK'

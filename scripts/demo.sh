@@ -46,27 +46,14 @@ run() { # run <colour> <label> <cmd...>
   PIDS+=($!)
 }
 
-# ── 1. the built frontends ───────────────────────────────────────────────────
-# The mobile app is built with VITE_BASE=/m/ to match where spa.py mounts it.
-# Getting this wrong is silent: the page loads and every asset 404s.
-if [ ! -f apps/web/dist/index.html ] || [ -n "${REBUILD:-}" ]; then
-  echo "  building the console (once — this is not a dev server)…"
-  npm --prefix apps/web run build --silent || {
-    echo "  ✗ console build failed. Run 'make setup' first."; exit 1;
-  }
-fi
-
+# ── 1. the built frontend ────────────────────────────────────────────────────
+# Built with VITE_BASE=/m/ to match where spa.py mounts it. Getting this wrong
+# is silent: the page loads and every asset 404s.
 if [ ! -f apps/mobile/dist/index.html ] || [ -n "${REBUILD:-}" ]; then
-  echo "  building the mobile app…"
+  echo "  building the mobile app (once — this is not a dev server)…"
   VITE_BASE=/m/ npm --prefix apps/mobile run build --silent || {
     echo "  ✗ mobile build failed. Run 'make setup' first."; exit 1;
   }
-fi
-
-# a build that predates the last source edit is the classic demo-day trap
-if [ -n "$(find apps/web/src apps/web/index.html -newer apps/web/dist/index.html 2>/dev/null | head -1)" ]; then
-  echo "  ⚠ apps/web/dist is older than your sources — rebuilding"
-  npm --prefix apps/web run build --silent
 fi
 
 if [ -n "$(find apps/mobile/src apps/mobile/index.html -newer apps/mobile/dist/index.html 2>/dev/null | head -1)" ]; then
@@ -76,10 +63,11 @@ fi
 
 # ── 2. offline asset check, before anyone is watching ────────────────────────
 missing=0
+# The basemap is served from assets/map by the API (MAP_DIR), not from any
+# app's dist — so this checks the source of truth, not a build artefact.
 for asset in \
-  apps/web/dist/map/chennai.pmtiles \
-  apps/web/dist/data/buildings.geojson \
-  apps/web/dist/fonts/inter-latin.woff2
+  assets/map/chennai.pmtiles \
+  assets/map/sprites/v4/light.json
 do
   [ -f "$asset" ] || { echo "  ✗ missing $asset — the demo will not survive a dead network"; missing=1; }
 done
@@ -118,7 +106,6 @@ echo ""
 echo "  ┌──────────────────────────────────────────────────────────┐"
 echo "  │  URBAN TWIN — demo mode (offline, one port)              │"
 echo "  │                                                          │"
-printf "  │    console     →  http://localhost:%-22s│\n" "$PORT"
 printf "  │    mobile app  →  http://localhost:%s/m%-18s│\n" "$PORT" ""
 printf "  │    api docs    →  http://localhost:%s/docs%-15s│\n" "$PORT" ""
 if [ -n "$LAN_IP" ]; then
@@ -136,7 +123,7 @@ echo ""
 # and a leading VAR=value is only an assignment when a *shell* parses the line.
 # Passed as argv[0] it is just a command name, and the api never starts —
 # which is precisely the kind of failure you find on stage.
-run 36 api env WEB_DIST=apps/web/dist MOBILE_DIST=apps/mobile/dist \
+run 36 api env MOBILE_DIST=apps/mobile/dist \
   "$PY" -m uvicorn services.cloud.api.main:app --host 0.0.0.0 --port "$PORT"
 
 # wait for /health rather than sleeping a guessed number of seconds

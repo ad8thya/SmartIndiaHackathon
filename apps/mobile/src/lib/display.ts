@@ -2,7 +2,7 @@
  * How the phone renders the shared vocabulary: colours, chips, and the
  * plain-language labels a member of the public should read instead of an enum.
  *
- * The console has its own version of this in apps/web/src/lib/colors.ts, tuned
+ * The console repo has its own version of this (src/lib/colors.ts), tuned
  * for a dark operator screen. These two are allowed to differ — one is read in
  * a control room, the other in sunlight — but they must never disagree about
  * *meaning*: green is a thing that is done, red is a thing that is not.
@@ -42,7 +42,7 @@ export function statusChipClass(status: WorkflowStatus): string {
  * Plain language for the public map.
  *
  * An operator reads "MAINTENANCE_ASSIGNED"; a citizen should read "repair
- * scheduled". Same wording as apps/web's PUBLIC_STATUS_LABEL — deliberately,
+ * scheduled". Same wording as the console's PUBLIC_STATUS_LABEL — deliberately,
  * so the same defect does not describe itself two different ways depending on
  * which screen you are standing in front of.
  */
@@ -66,7 +66,7 @@ export const PUBLIC_STATUS_LABEL: Partial<Record<WorkflowStatus, string>> = {
  * where a human has been told and the city owns the item — and runs to
  * RESOLVED.
  *
- * Identical to apps/web's PUBLIC_STATUSES. If the two ever disagree, the
+ * Identical to the console's PUBLIC_STATUSES. If the two ever disagree, the
  * stricter one is right.
  */
 export const PUBLIC_STATUSES: readonly WorkflowStatus[] = [

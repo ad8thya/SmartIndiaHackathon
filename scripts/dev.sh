@@ -3,9 +3,11 @@
 # Runs the hot-reloading processes side by side and kills them all together on
 # Ctrl-C. Logs are prefixed and colourised so six people can read one terminal.
 #
-# Two frontends, two ports, one API:
-#   :5173  apps/web     the desktop command console (and /field)
+# One frontend, one port, one API:
 #   :5176  apps/mobile  the phone app — citizen, crew, driver, emergency
+#
+# The desktop console lives in its own repository now. Run it there; it talks
+# to this API over CORS, which is already open to any localhost port.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -41,9 +43,6 @@ LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{
 echo ""
 echo "  ┌──────────────────────────────────────────────────────────┐"
 echo "  │  URBAN TWIN is starting                                  │"
-echo "  │    console (desktop) →  http://localhost:5173            │"
-echo "  │      role picker     →  http://localhost:5173/           │"
-echo "  │      mobile view     →  http://localhost:5173/field      │"
 echo "  │    mobile app        →  http://localhost:5176            │"
 echo "  │    api docs          →  http://localhost:${API_PORT:-8000}/docs       │"
 if [ -n "$LAN_IP" ]; then
@@ -57,7 +56,6 @@ echo ""
 run 36 api    "$PY" -m uvicorn services.cloud.api.main:app --host 0.0.0.0 --port "${API_PORT:-8000}" --reload
 sleep 2
 run 35 replay "$PY" -m services.tools.replay --speed "${REPLAY_SPEED:-60}" --buses "${REPLAY_BUSES:-6}" --loop
-run 32 web    npm --prefix apps/web run dev -- --host --port 5173
 run 33 mobile npm --prefix apps/mobile run dev -- --host --port 5176
 
 wait

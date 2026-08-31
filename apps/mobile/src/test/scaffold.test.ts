@@ -5,7 +5,7 @@ import { ROUTE_COUNT, SCHOOL_ZONES } from '../lib/cityRef';
 /**
  * These assert the *generated* layer, not this app's own code.
  *
- * apps/web and apps/mobile are separate builds that share one contract. The
+ * The console and this app are separate builds that share one contract. The
  * failure mode worth catching early is the one that already bit this project
  * once (BUILD.md §5): a hand-edit to one copy of the types that nothing
  * notices until two clients disagree about what a status means. If `make

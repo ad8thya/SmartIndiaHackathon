@@ -18,11 +18,15 @@ import { WORKFLOW_ORDER } from '../lib/types';
 const ROOT = resolve(__dirname, '../..');
 
 describe('the basemap is local', () => {
-  it('is a symlink to apps/web, not a second copy of the extract', () => {
+  it('is a symlink to the shared assets/map, not a copy of the extract', () => {
     const link = resolve(ROOT, 'public/map');
     expect(lstatSync(link).isSymbolicLink()).toBe(true);
-    // Resolving it must land inside apps/web — one extract on disk, not two.
-    expect(realpathSync(link)).toContain('apps/web/public/map');
+    // It must resolve to the repo-level asset, NOT into another app. The
+    // basemap used to live in apps/web and reach this app through a link,
+    // which quietly made the phone's map depend on the desktop app existing.
+    const target = realpathSync(link);
+    expect(target).toContain('assets/map');
+    expect(target).not.toContain('apps/');
   });
 
   it('ships the tiles, the glyphs and the sprites', () => {

@@ -2,10 +2,10 @@
  * The four roles that live on a phone, and what each one is allowed to open.
  *
  * Urban Twin has eight roles. Four of them decide things at a desk and are
- * built in apps/web — Municipal Authority, Traffic Police, Urban Planner,
+ * built in the console repo — Municipal Authority, Traffic Police, Urban Planner,
  * Smart City Admin. The four here act in the street. The `RoleId` strings are
- * deliberately the *same* strings apps/web uses (see
- * apps/web/src/roles/roles/config.ts) so that a role travelling over the
+ * deliberately the *same* strings the console uses (see its
+ * src/roles/roles/config.ts) so that a role travelling over the
  * WebSocket, a query param, or a work-order assignment means the same thing on
  * both clients. Do not shorten them for the phone.
  *
@@ -33,7 +33,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-/** The four phone roles. Same spelling as apps/web's RoleId. */
+/** The four phone roles. Same spelling as the console's RoleId. */
 export type MobileRoleId = 'citizen' | 'road-maintenance' | 'bus-driver' | 'emergency-team';
 
 /** The four that are desktop-only. Named so the login screen can say why. */
