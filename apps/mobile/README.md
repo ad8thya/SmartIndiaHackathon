@@ -128,6 +128,28 @@ The one deliberate difference from `apps/web`: the console's accent is its own,
 while this app uses the design's `#2563EB` throughout, and reserves the emerald
 gradient for the citizen hero banner — the only gradient in the app.
 
+## It is a phone app, including on a laptop
+
+Every screen is designed against a 390px viewport. Left to itself in a desktop
+browser the app stretches to the window width and every decision in it —
+one-column lists, a bottom tab bar, thumb-reachable actions — stops making
+sense.
+
+So above a phone-sized viewport it renders inside a 390 x 844 device frame
+(iPhone 13/14 logical resolution) centred on a neutral backdrop. It is **not**
+a scale transform: the app runs at true 390px CSS pixels, so text is its real
+size and hairlines stay hairlines.
+
+Below 480px the media query never matches and the app is full-bleed, as it must
+be on a real phone. Installed as a PWA the frame is taken back off — written as
+a removal rule rather than a condition, so an engine that does not understand
+`display-mode` keeps the frame (harmless) instead of dropping the whole query
+and rendering full width (not harmless). That standalone path is reasoned, not
+tested: playwright cannot emulate `display-mode`.
+
+It is also why the console's `PhoneFrame` does not double-frame — that iframe
+is 390px wide, so the desktop rule never triggers inside it.
+
 ## Layout rules
 
 - 44px minimum touch target (`.ut-touch`); primary actions sit low, in thumb reach.

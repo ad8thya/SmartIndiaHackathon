@@ -71,6 +71,102 @@
     -webkit-user-select: none;
     user-select: none;
   }
+
+  /**
+   * ── The device frame ──────────────────────────────────────────────────
+   *
+   * This app is built for a 390px-wide screen and nothing else. Left to
+   * itself in a desktop browser it stretches to 1900px, and every decision
+   * in it — one-column lists, a bottom tab bar, thumb-reachable actions —
+   * stops making sense and it reads as a badly built web page.
+   *
+   * So above a phone-sized viewport it renders inside an iPhone-shaped
+   * frame instead: 390 x 844, the logical resolution of an iPhone 13/14,
+   * which is the size every screen here was actually designed against.
+   *
+   * Three things this deliberately is NOT:
+   *   · not a scale transform — the app runs at true 390px CSS pixels, so
+   *     text renders at its real size and hairlines stay hairlines;
+   *   · not applied on a real phone — below 480px the media query never
+   *     matches and the app is full-bleed, as it must be;
+   *   · not applied to an installed PWA — `display-mode: standalone` means
+   *     it IS the whole screen, even on an iPad, and drawing a fake phone
+   *     bezel around a real app window would be absurd. That case is a
+   *     separate REMOVAL rule below, not a condition on the rule here: a
+   *     `display-mode` term inside this query would make the whole query
+   *     fail on any engine that does not know the feature, and the failure
+   *     mode of that is the stretched full-width web page this exists to
+   *     prevent. Removing decoration is the safe thing to make conditional.
+   *
+   * It is also why the console's PhoneFrame does not end up with a frame
+   * inside a frame: that iframe is 390px wide, so this never triggers.
+   */
+  @media (min-width: 480px) and (min-height: 560px) {
+    body {
+      /* A neutral desk the device sits on, rather than the app's own canvas
+         bleeding to the window edges and blurring where the phone ends. */
+      background: #d9dde3;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    #root {
+      width: 390px;
+      /* dvh, not vh: a desktop window is resizable and the frame should
+         shrink with it rather than overflow off the bottom. */
+      height: min(844px, calc(100dvh - 48px));
+      overflow: hidden;
+      border-radius: 44px;
+      /* The bezel: a dark ring, then a soft drop shadow to lift it off the
+         desk. Two shadows rather than a border so the radius stays clean. */
+      box-shadow:
+        0 0 0 10px #1c1f24,
+        0 0 0 11px rgba(255, 255, 255, 0.18),
+        0 28px 60px -12px rgba(15, 23, 42, 0.45);
+      /* Contains the fixed/absolute chrome — the bottom sheet, the map
+         controls — so nothing escapes the rounded corners. */
+      isolation: isolate;
+    }
+  }
+
+  /* A viewport tall enough for the device but too short for the bezel to
+     breathe: drop the padding rather than clipping the frame. */
+  @media (min-width: 480px) and (max-height: 900px) {
+    body {
+      padding: 12px;
+    }
+    #root {
+      /* Still capped at 844: this query only tightens the padding, it must
+         not let the device grow taller than the screen it is imitating. */
+      height: min(844px, calc(100dvh - 24px));
+    }
+  }
+
+  /**
+   * Installed as an app: the window IS the device, so take the frame back
+   * off. Written as a removal so that an engine which does not understand
+   * `display-mode` simply keeps the frame — the harmless outcome — rather
+   * than dropping the whole thing and rendering full width.
+   *
+   * NOT VERIFIED IN THIS HARNESS: playwright cannot emulate display-mode,
+   * so this path is reasoned rather than tested. Check it by installing the
+   * app and confirming there is no bezel.
+   */
+  @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+    body {
+      background: theme('colors.canvas');
+      display: block;
+      padding: 0;
+    }
+
+    #root {
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
 }
 
 @layer components {
