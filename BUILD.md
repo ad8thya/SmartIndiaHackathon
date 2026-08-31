@@ -16,8 +16,8 @@ to IRC:82-2015, traffic density from probe vehicles, pedestrian conflict zones n
 schools, and hit-and-run incidents with plate evidence. Detections from many buses are
 *fused*: three different vehicles seeing the same pothole is evidence, one bus seeing it
 thirty times is a dirty lens. Only corroborated events escalate to a municipal work order
-with an SLA clock. The output is a 3D command centre plus a mobile field app for repair
-crews.
+with an SLA clock. The output is a 3D command centre plus a mobile view (`/field`) for
+repair crews.
 
 **The architecture is mock-first.** Every module ships a working fake that produces
 convincing synthetic data today; the real implementation is a stub that raises
@@ -55,7 +55,7 @@ mock for real code is a one-line change inside one folder that no other file obs
 | **api** | M5 | n/a — real | **Real.** 19 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/cloud/api/**` |
 | **db** | M5 | n/a — real | **Real.** 9 tables, PostGIS Geography, 1 migration, autogenerate verified empty | `packages/db/**` |
 | **contracts** | shared | n/a | **Real, and FROZEN (v1.1.0).** 8 Protocols, 17 models, pure fusion maths. One approved one-time amendment applied — see §10 | `packages/contracts/**` (team decision) |
-| **frontend** | M6 | n/a — real | **Real.** ONE app (`apps/web`) on ONE port: role picker, all 8 role views, and the field app at `/field`. Real offline basemap (committed PMTiles), real 3D buildings, contract types generated from `packages/contracts` | `apps/web/src/**` |
+| **frontend** | M6 | n/a — real | **Real.** ONE app (`apps/web`) on ONE port: role picker, all 8 role views, and the mobile view at `/field`. Real offline basemap (committed PMTiles), real 3D buildings, contract types generated from `packages/contracts` | `apps/web/src/**` |
 
 ### What the mocks actually produce
 
@@ -124,7 +124,7 @@ services/<module>/
    ┌─────────────────────────────────────────────────────┐
    │  M6 apps/web — ONE app, ONE port, :5173              │
    │  MapLibre + deck.gl command centre at /app/:role ·   │
-   │  field app (Feed · Detail · Map · MyTasks) at /field │
+   │  mobile view (Feed · Detail · Map · MyTasks) — /field │
    └─────────────────────────────────────────────────────┘
 ```
 
@@ -200,7 +200,7 @@ buses); all 12 `Observation` rejection cases; GIST indexes on all 6 geom columns
 | **F6** | *(declined — see §5)* | | |
 | **F7** | `buildings.geojson` was a synthetic block grid (every ring exactly 5 vertices), and the fetch script covered a hardcoded box | BBox derived from `citydata.ROUTES` + 500 m; `--tagged-only` filter; heights floored at 3 m and rounded; coords to 6 dp | `scripts/fetch_buildings.py`, `Makefile` |
 | **F8** | *(no action — pytest warning noise only)* | | |
-| **F9** | Plain `PEDESTRIAN` sightings were fused into workflow Events with a fabricated `SMALL` severity and a 720-hour SLA. **83 of 149 events were pedestrians**; the field app read *"183 open across your zone"* and offered crews `pedestrian … SLA 30d` | Added `FUSABLE_CLASSES` to contracts (the only authorised contract change); both `mock.py` and `impl.py` filter on it. `_worst_severity` now returns `Severity \| None` and never invents one; safety classes resolve through an explicit `_SAFETY_SEVERITY` table; an infrastructure class without severity **raises**. PEDESTRIAN events: **83 → 0** | `contracts/enums.py`, `contracts/__init__.py`, `services/cloud/consensus/mock.py`, `services/cloud/consensus/impl.py` |
+| **F9** | Plain `PEDESTRIAN` sightings were fused into workflow Events with a fabricated `SMALL` severity and a 720-hour SLA. **83 of 149 events were pedestrians**; the `/field` view read *"183 open across your zone"* and offered crews `pedestrian … SLA 30d` | Added `FUSABLE_CLASSES` to contracts (the only authorised contract change); both `mock.py` and `impl.py` filter on it. `_worst_severity` now returns `Severity \| None` and never invents one; safety classes resolve through an explicit `_SAFETY_SEVERITY` table; an infrastructure class without severity **raises**. PEDESTRIAN events: **83 → 0** | `contracts/enums.py`, `contracts/__init__.py`, `services/cloud/consensus/mock.py`, `services/cloud/consensus/impl.py` |
 | **F10** | `.gitignore` missed `*.pt`, `*.pth`, `*.db`, `data/raw_video/`, `data/processed/` | Added those plus `*.onnx`, `*.pdparams`, `models/`, `data/*.pkl`, `*.sqlite3` | `.gitignore` |
 | **F11** | Every `make revision` ended in `FAILED: Could not find entrypoint console_scripts.ruff` — ruff ships as a binary, not a Python entrypoint | Removed the post-write hook; generated migrations are ruff-excluded anyway | `packages/db/alembic.ini` |
 | **F12** | `/api/analytics/summary` counted only in-memory events while `/api/events` merged postgres + memory. The KPI strip read **9** while the panel below it showed **53** | Extracted `merged_events()` as the single definition of "all events"; both endpoints call it. Verified live: **37 vs 37** | `services/cloud/api/routers/events.py`, `services/cloud/api/routers/analytics.py` |

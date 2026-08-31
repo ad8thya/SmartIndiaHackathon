@@ -161,7 +161,7 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
 | Central database | PostGIS on Postgres (`packages/db`) |
 | AI Intelligence Layer | `services/cloud/intelligence/urban_risk` (Urban Risk Index), `services/cloud/intelligence/recommend` (Maintenance Recommendation Engine), `services/cloud/intelligence/traffic_analytics` + `services/cloud/intelligence/whatif` (congestion / route delay), `services/edge/incidents/near_miss.py` (incident + near-miss severity) |
 | GIS & Digital Twin | `apps/web` — MapLibre + deck.gl over a committed PMTiles basemap, 3D twin at 45° pitch, road-health / congestion / risk-band layers |
-| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command console and the field app at `/field`. Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
+| Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command console and the mobile view at `/field`. Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
 | End users (RBAC) | All eight roles are built, in one app: `/app/:role`. The six operator roles get the desktop console; Citizen and Bus Driver get purpose-built phone-shaped screens |
 
 ### Role split (RBAC) — who the product is for
@@ -212,8 +212,8 @@ daily loop and the before-you-push checklist.
 | what | where |
 |---|---|
 | Role picker (landing) | <http://localhost:5173/> |
-| A role | <http://localhost:5173/app/municipal-authority> |
-| Field app | <http://localhost:5173/field> (also on your phone, same wifi) |
+| A role — operator console | <http://localhost:5173/app/municipal-authority> |
+| Mobile view — embedded in the console's phone frame, and openable directly on a real phone | <http://localhost:5173/field> |
 | API docs | <http://localhost:8000/docs> |
 
 `make dev` prints your laptop's LAN IP on startup. Open that from a phone on
@@ -232,6 +232,10 @@ Railway / Render / Fly). The production image serves the API and the UI from
 one container on one port, so there is no CORS to configure.
 
 Sanity check any time: `make smoke`
+
+Running `make test`? `make setup` installs the core dependencies only, so 7
+tests skip with a "needs the `[ml]` extra" message. That's expected, not a
+failure. `pip install -e ".[ml]"` if you need them.
 
 **Requirements:** Docker Desktop running, Python 3.11 or 3.12, Node 20+.
 
@@ -292,6 +296,9 @@ services/<module>/
   test_module.py    tests written against the PROTOCOL, not the mock
 ```
 
+Run `echo m3 > .member` once (gitignored) and `make mine` picks it up — or
+pass `MEMBER=m3` explicitly each time.
+
 ---
 
 ### 🟠 M1 · Road Defects
@@ -311,7 +318,8 @@ Infrastructure classes **must** carry an IRC:82-2015 `severity` — the
 `Observation` validator rejects them otherwise. A clean frame returns `[]`; a
 bad frame must not raise.
 
-**Your commands** · `MEMBER=m1 make mine` · `pip install -e ".[ml]"` ·
+**Your commands** · `echo m1 > .member` once, then `make mine` (or
+`MEMBER=m1 make mine` each time) · `pip install -e ".[ml]"` ·
 flag: `USE_REAL_DEFECTS`
 
 **Your panel** — the defect backlog: severity summary that doubles as a filter,
@@ -524,7 +532,7 @@ so you are never blocked on your own merge conflicts.
 
 **Files you own**
 ```
-apps/web/src/{App,main}.tsx, components/**, lib/**, store/**, styles/**, test/**
+apps/web/src/{CommandApp,main}.tsx, components/**, lib/**, store/**, styles/**, test/**
 apps/web/src/field/**                          (the mobile app, at /field)
 apps/web/src/roles/**                          (the role shell + phone screens)
 scripts/fetch_buildings.py, scripts/gen_frontend_types.py
@@ -546,7 +554,7 @@ contained and routes itself to the right person.
 |---|---|
 | 1 | Map renders with buildings, routes, buses, events. All five panels mounting. `npm run test` green. |
 | 2 | WebSocket live and reconnecting. Buses interpolating smoothly between updates. |
-| 3 | Field app on a real phone over wifi; PhoneFrame showing the same URL. |
+| 3 | `/field` on a real phone over wifi; PhoneFrame showing the same URL. |
 | 4 | Filters, event detail card, status write-back working end to end. |
 | 5 | Polish pass: transitions, empty states, loading states, the offline map fallback. |
 | 6 | Performance: 500+ events on the map without dropping frames. Real OSM buildings via `make buildings`. |
@@ -714,12 +722,21 @@ Something on your machine already owns the port. Find it:
 lsof -i :5432 -i :6379 -i :1883 -i :8000 -i :5173
 ```
 
-The two that actually happen:
+The ones that actually happen:
 
 - **6379** — a Homebrew redis running as a service.
   `brew services stop redis`, or map the container elsewhere.
 - **5432** — a local postgres. Stop it, or set `POSTGRES_PORT=5433` in your
   `.env` (the compose file reads it, and `DATABASE_URL` must match).
+- **8000** — nastier than the other two: on macOS the api can bind
+  `0.0.0.0:8000` right alongside something else already holding
+  `127.0.0.1:8000`, with no error from either side. The browser resolves
+  `localhost` to the loopback address and silently talks to the *other*
+  process — the demo looks like it started, the map renders, and every API
+  call just returns someone else's 404, with nothing to explain why.
+  `scripts/demo.sh` checks for exactly this before it starts anything; `make
+  dev` does not, so if `:8000` looks up but behaves wrong, check this first.
+  `API_PORT=8010 make dev` (or `make demo`) picks another port.
 
 If nothing is listening and it still fails, Docker Desktop is not running —
 `open -a Docker` and wait for the whale to settle.
@@ -754,7 +771,7 @@ not affect `npm run build` output or anything you deploy.
 
 We are deliberately not bumping Vite mid-sprint — a major bundler upgrade on day
 3 of 7 is a worse risk than the advisory. Mitigation: the dev servers bind to
-your LAN (`--host`, which the field app needs for phone testing), so do not run
+your LAN (`--host`, which `/field` needs for phone testing), so do not run
 `make dev` on untrusted wifi. Revisit after the hackathon.
 </details>
 

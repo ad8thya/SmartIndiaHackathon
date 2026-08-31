@@ -7,7 +7,7 @@ Vite + React 18 + TS + Tailwind + react-router-dom + zustand. Port **5173** only
 | `/` | role picker (landing) |
 | `/app/:role` | role home — command console for the 6 operator roles, phone-shaped shell for `citizen` / `bus-driver` |
 | `/app/:role/:screen` | a specific panel (command) or tab (roles shell) |
-| `/field` | mobile field app — PhoneFrame iframes it, same URL opens on a phone |
+| `/field` | mobile view — PhoneFrame iframes it, same URL opens directly on a phone |
 
 A missing or unrecognised `:role` falls through to the full unrestricted console — never blank.
 
