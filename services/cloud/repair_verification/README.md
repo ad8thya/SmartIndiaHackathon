@@ -33,7 +33,9 @@ Close Work Order
 
 ```python
 class RepairVerifier(Protocol):
-    def verify(self, work_order_id: UUID, post_repair_observations: list[Observation]) -> VerificationResult: ...
+    def verify(
+        self, work_order_id: UUID, post_repair_observations: list[Observation]
+    ) -> VerificationResult: ...
 ```
 
 Inputs it will need from existing modules:

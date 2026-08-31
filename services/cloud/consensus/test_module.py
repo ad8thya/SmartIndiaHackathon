@@ -310,3 +310,114 @@ def test_safety_classes_cluster_more_tightly(fuser: EventFuser) -> None:
         ]
     )
     assert len(pedestrians) == 2
+
+
+# ── the real DBSCAN fuser (USE_REAL_FUSION=true) ────────────────────────────
+#
+# These run against `impl.py` directly rather than through the factory, so they
+# do not depend on anyone's flag. sklearn lives in the `[ml]` extra, so they
+# skip cleanly in a core-only environment (CI installs `[dev]`).
+
+
+@pytest.fixture
+def real_fuser() -> EventFuser:
+    pytest.importorskip("sklearn", reason="DBSCAN fusion needs the [ml] extra")
+    from services.cloud.consensus.impl import RealEventFuser
+
+    return RealEventFuser()
+
+
+def test_real_fuser_satisfies_the_protocol(real_fuser: EventFuser) -> None:
+    assert isinstance(real_fuser, EventFuser)
+
+
+def test_real_fuser_never_emits_unfusable_classes(real_fuser: EventFuser) -> None:
+    """The F9 regression, against the real implementation this time.
+
+    Plain PEDESTRIAN presence became 83 of 149 events once. It must not come
+    back through the other implementation.
+    """
+    events = real_fuser.fuse(
+        [
+            obs(detection_class=DetectionClass.PEDESTRIAN, severity=None),
+            obs(detection_class=DetectionClass.VEHICLE, severity=None),
+            obs(detection_class=DetectionClass.POTHOLE, severity=Severity.LARGE),
+        ]
+    )
+    assert all(event.detection_class in FUSABLE_CLASSES for event in events)
+    assert all(event.detection_class is not DetectionClass.PEDESTRIAN for event in events)
+
+
+def test_real_fuser_keeps_a_lone_sighting(real_fuser: EventFuser) -> None:
+    """DBSCAN calls it noise; we call it one bus's report.
+
+    `min_samples=2` labels an isolated observation -1. Discarding those would
+    throw away every first sighting — the thing the ladder starts from.
+    """
+    events = real_fuser.fuse([obs(confidence=0.88, severity=Severity.LARGE)])
+    assert len(events) == 1
+    assert events[0].observation_count == 1
+    assert events[0].distinct_bus_count == 1
+
+
+def test_dbscan_merges_what_the_grid_splits(real_fuser: EventFuser) -> None:
+    """The actual reason to swap implementations.
+
+    Three buses report the same pothole within a couple of metres. Snap-to-grid
+    puts them either side of a cell boundary and reports two events with 2 and
+    1 corroborating buses; DBSCAN sees one cluster of three, which crosses the
+    >=3-bus threshold and escalates to AUTHORITY_NOTIFIED.
+
+    This asserts the *difference*, deliberately — the two implementations are
+    not meant to agree here, and a test asserting they do would be asserting
+    the bug.
+    """
+    cluster = [
+        obs(bus="MTC-ADYAR-1042", lat=SPOT[0], lon=SPOT[1], confidence=0.62),
+        obs(bus="MTC-TNAGAR-1875", lat=SPOT[0] + 0.00002, lon=SPOT[1] + 0.00002, confidence=0.71),
+        obs(bus="MTC-BROADWAY-5090", lat=SPOT[0] - 0.00001, lon=SPOT[1] - 0.00002, confidence=0.55),
+    ]
+    real = real_fuser.fuse(cluster)
+    assert len(real) == 1
+    assert real[0].distinct_bus_count == 3
+    assert real[0].observation_count == 3
+
+
+def test_real_fuser_event_ids_are_stable_across_passes(real_fuser: EventFuser) -> None:
+    """The map depends on this: a new uuid per pass re-creates every pin.
+
+    Ids are keyed off the grid cell the centroid falls in, not the centroid
+    itself, precisely so that one more observation landing does not mint a new
+    event — see the note in impl.py.
+    """
+    first = real_fuser.fuse([obs(bus="MTC-ADYAR-1042", confidence=0.62)])
+    second = real_fuser.fuse(
+        [
+            obs(bus="MTC-ADYAR-1042", confidence=0.62),
+            obs(bus="MTC-TNAGAR-1875", lat=SPOT[0] + 0.00002, confidence=0.71),
+        ]
+    )
+    assert first[0].event_id == second[0].event_id
+    assert second[0].distinct_bus_count == 2
+
+
+def test_real_fuser_is_deterministic(real_fuser: EventFuser) -> None:
+    observations = [
+        obs(bus="MTC-ADYAR-1042", confidence=0.62),
+        obs(bus="MTC-TNAGAR-1875", lat=SPOT[0] + 0.00002, confidence=0.71),
+        obs(bus="MTC-KOYAMBEDU-4408", lat=SPOT[0] + 0.02, confidence=0.80),
+    ]
+    assert real_fuser.fuse(observations) == real_fuser.fuse(observations)
+
+
+def test_real_fuser_uses_the_same_ladder(real_fuser: EventFuser) -> None:
+    """`derive_status` is shared, not reimplemented — 3 buses and >=0.95 wins."""
+    events = real_fuser.fuse(
+        [
+            obs(bus="MTC-ADYAR-1042", confidence=0.8),
+            obs(bus="MTC-TNAGAR-1875", lat=SPOT[0] + 0.00002, confidence=0.8),
+            obs(bus="MTC-BROADWAY-5090", lat=SPOT[0] - 0.00001, confidence=0.8),
+        ]
+    )
+    assert events[0].distinct_bus_count == 3
+    assert events[0].status is WorkflowStatus.AUTHORITY_NOTIFIED

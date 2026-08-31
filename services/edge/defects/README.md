@@ -27,7 +27,7 @@ services/edge/defects/
   impl.py          ← your real YOLOv8 work goes here
   factory.py       get_defect_detector()
   test_module.py   Protocol tests — they must pass against BOTH implementations
-apps/command/src/panels/DefectsPanel.tsx
+apps/web/src/panels/DefectsPanel.tsx
 ```
 
 ## Run it standalone

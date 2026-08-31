@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
-.PHONY: help setup dev down logs migrate revision seed smoke test test-py test-js fmt lint typecheck mine up up-full reset buildings clean
+.PHONY: help setup dev demo prod down logs migrate revision seed smoke test test-py test-js fmt lint typecheck mine up up-full reset buildings types clean
 
 # prefer 3.11/3.12 — some geo/ML wheels lag on the newest interpreter
 PYTHON_BIN := $(shell command -v python3.11 || command -v python3.12 || command -v python3)
@@ -33,8 +33,7 @@ setup: ## create venv, install python + node deps, generate .env if missing
 	$(PIP) install -e ".[dev]" -q
 	echo "→ python core installed. Perception owners (M1/M3/M4): $(PIP) install -e '.[ml]'"
 	echo "→ traffic owner (M2):                                   $(PIP) install -e '.[geo]'"
-	cd apps/command && npm install --silent
-	cd apps/field   && npm install --silent
+	cd apps/web && npm install --silent
 	echo ""
 	echo "  ✔ setup complete →  make dev"
 
@@ -49,6 +48,12 @@ up-full: ## start EVERYTHING in docker, api included
 
 dev: up migrate seed ## THE COMMAND: full system, mock data, hot reload
 	bash scripts/dev.sh
+
+demo: ## DEMO DAY: built frontend served by the api, one port, zero network
+	bash scripts/demo.sh
+
+prod: ## whole stack in docker, production shape, one container serves api + ui
+	docker compose -f docker-compose.prod.yml up --build
 
 down: ## stop containers (data survives)
 	$(COMPOSE) --profile full down
@@ -73,6 +78,9 @@ seed: ## load 6 Chennai routes, 6 buses, 3 school zones, ~40 events
 buildings: ## re-fetch OSM building footprints for the 3D twin (needs network)
 	$(PY) scripts/fetch_buildings.py --tagged-only
 
+types: ## regenerate the frontend's contract types from packages/contracts
+	$(PY) scripts/gen_frontend_types.py
+
 # ── quality ────────────────────────────────────────────────────────────────
 smoke: ## green/red checklist of every moving part
 	$(PY) scripts/smoke_test.py
@@ -83,7 +91,7 @@ test-py: ## all python tests
 	$(PYTEST)
 
 test-js: ## frontend unit tests
-	cd apps/command && npm run test -- --run
+	cd apps/web && npm run test -- --run
 
 mine: ## run ONLY your module's tests (uses your git branch, or MEMBER=m3)
 	bash scripts/mine.sh $(MEMBER)

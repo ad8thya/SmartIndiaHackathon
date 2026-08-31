@@ -13,7 +13,7 @@ Two things live here, and they are deliberately independent:
      collision (see `contracts.FUSABLE_CLASSES`). This is what makes near-miss
      events show up as escalating workflow items on the map.
 
-  2. `scripted_near_misses()` — a pure function over the same three junctions,
+  2. `scripted_near_misses()` — a pure function over the same junction table,
      independent of replay having run at all. `GET /api/near-misses` calls
      this directly (the same "ask the detector for the scripted scene" pattern
      `routers/incidents.py` already uses for the hit-and-run dossier), so the
@@ -27,6 +27,7 @@ disagree about where or how severe.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID, uuid5
@@ -60,24 +61,55 @@ class _Junction:
     near: str  # narrative only — the school zone this junction is styled on
 
 
+def _severity_from_ttc(ttc_seconds: float) -> Severity:
+    """The near-miss severity rule, from BUILD.md §10.
+
+    Deliberately *not* the IRC:82-2015 table — that governs the dimensions of
+    surface distress and has nothing to say about a vehicle nearly hitting
+    someone. Time-to-collision is the measure here.
+    """
+    if ttc_seconds < 0.5:
+        return Severity.LARGE
+    if ttc_seconds < 1.0:
+        return Severity.MEDIUM
+    return Severity.SMALL
+
+
 def _junction(
     key: str,
     road_id: str,
     bus_id: str,
     min_ttc_seconds: float,
     closing_speed_kmph: float,
-    severity: Severity,
     near: str,
 ) -> _Junction:
+    """Severity is derived, never hand-set — so it can never disagree with the
+    TTC printed next to it in the UI."""
     lon, lat = segment_by_id(road_id).center
     return _Junction(
-        key, road_id, bus_id, lat, lon, min_ttc_seconds, closing_speed_kmph, severity, near
+        key,
+        road_id,
+        bus_id,
+        lat,
+        lon,
+        min_ttc_seconds,
+        closing_speed_kmph,
+        _severity_from_ttc(min_ttc_seconds),
+        near,
     )
 
 
-#: Three scripted junctions, one per route, styled on real school zones from
-#: citydata.SCHOOL_ZONES — the same reason M3's pedestrian mock fires there.
-#: Do not renumber these keys, the nm_id is derived from them.
+#: Ten scripted junctions spread across all six seeded routes — every route's
+#: bus witnesses at least one, and the three original keys keep their ids and
+#: positions so the rehearsed narrative and the stable nm_ids both survive.
+#:
+#: `bus_id` must be the bus that actually runs the segment's route, or the
+#: junction never fires: `detect()` matches on bus id *and* proximity.
+#: Do not renumber these keys — the nm_id is a uuid5 of them.
+#:
+#: TTC spans 0.4 s (a genuine near-collision on the beach road, where there is
+#: nowhere to swerve) to 1.4 s (a wide, slow junction). Severity follows from
+#: it via `_severity_from_ttc`, so the two always agree.
 _JUNCTIONS: tuple[_Junction, ...] = (
     _junction(
         key="ra-puram-crossing",
@@ -85,7 +117,6 @@ _JUNCTIONS: tuple[_Junction, ...] = (
         bus_id="MTC-ADYAR-1042",
         min_ttc_seconds=0.6,
         closing_speed_kmph=42.0,
-        severity=Severity.LARGE,
         near="Chettinad Vidyashram, R.A. Puram",
     ),
     _junction(
@@ -94,7 +125,6 @@ _JUNCTIONS: tuple[_Junction, ...] = (
         bus_id="MTC-PERAMBUR-2217",
         min_ttc_seconds=1.1,
         closing_speed_kmph=22.0,
-        severity=Severity.MEDIUM,
         near="DAV Boys, Gopalapuram",
     ),
     _junction(
@@ -103,8 +133,63 @@ _JUNCTIONS: tuple[_Junction, ...] = (
         bus_id="MTC-KOYAMBEDU-4408",
         min_ttc_seconds=0.9,
         closing_speed_kmph=30.0,
-        severity=Severity.MEDIUM,
         near="Chennai Girls Hr Sec, Nungambakkam",
+    ),
+    _junction(
+        key="marina-beach-road",
+        road_id="SEG-21G-002",
+        bus_id="MTC-VYASARPADI-3311",
+        min_ttc_seconds=0.4,
+        closing_speed_kmph=48.0,
+        near="Marina promenade crossing, Kamarajar Salai",
+    ),
+    _junction(
+        key="santhome-school-gate",
+        road_id="SEG-21G-003",
+        bus_id="MTC-VYASARPADI-3311",
+        min_ttc_seconds=0.7,
+        closing_speed_kmph=35.0,
+        near="Santhome Higher Secondary, Santhome High Road",
+    ),
+    _junction(
+        key="anna-salai-crossing",
+        road_id="SEG-M1-004",
+        bus_id="MTC-BROADWAY-5090",
+        min_ttc_seconds=0.5,
+        closing_speed_kmph=45.0,
+        near="Anna Salai at Thousand Lights",
+    ),
+    _junction(
+        key="adyar-signal",
+        road_id="SEG-51C-001",
+        bus_id="MTC-TNAGAR-1875",
+        min_ttc_seconds=1.3,
+        closing_speed_kmph=18.0,
+        near="Sardar Patel Road at Adyar signal",
+    ),
+    _junction(
+        key="arcot-road-market",
+        road_id="SEG-51C-003",
+        bus_id="MTC-TNAGAR-1875",
+        min_ttc_seconds=1.0,
+        closing_speed_kmph=26.0,
+        near="Arcot Road market frontage, Vadapalani",
+    ),
+    _junction(
+        key="kilpauk-garden-gate",
+        road_id="SEG-42A-001",
+        bus_id="MTC-PERAMBUR-2217",
+        min_ttc_seconds=1.4,
+        closing_speed_kmph=16.0,
+        near="Kilpauk Garden Road school gate",
+    ),
+    _junction(
+        key="egmore-trunk-crossing",
+        road_id="SEG-27B-003",
+        bus_id="MTC-ADYAR-1042",
+        min_ttc_seconds=0.8,
+        closing_speed_kmph=33.0,
+        near="EVR Periyar Salai at Egmore",
     ),
 )
 
@@ -154,12 +239,13 @@ def _near_miss_to_observation(nm: NearMissEvent, meta: FrameMeta) -> Observation
 
 
 class MockNearMissDetector:
-    """Scripted near-miss events at three plausible junctions.
+    """Scripted near-miss events at ten plausible junctions.
 
     Same "fires once per replay loop" shape as `MockIncidentDetector`'s
-    scripted hit-and-run: each junction fires once, `reset()` re-arms all
-    three for the next loop, so the demo tells the same three stories every
-    time it runs.
+    scripted hit-and-run: each junction fires once and `reset()` re-arms them
+    all for the next loop, so the demo tells the same stories every time it
+    runs. Spread across all six routes, so whichever bus a judge follows,
+    something happens.
     """
 
     def __init__(self) -> None:
@@ -194,15 +280,33 @@ class MockNearMissDetector:
         self._fired.clear()
 
 
-def scripted_near_misses(now: datetime) -> list[NearMissEvent]:
-    """The ~3 scripted near-miss events, independent of replay having run.
+#: scripted near-misses land inside this window, so they all count towards
+#: `RoadCondition.near_miss_count_7d` and the API's `since` filter
+_HISTORY_WINDOW_HOURS = 160  # under 7 days, with room to spare
 
-    Deterministic and pure: same `now` in, same events out, spread over the
-    last few days so `since`/bbox filtering on `GET /api/near-misses` has
-    something to filter.
+
+def _hours_ago(key: str) -> float:
+    """Deterministic, uneven offset derived from the junction key.
+
+    A linear `index * 30` spread put ten junctions 11 days back and made the
+    timestamps look generated — every one landing on the same minute of the
+    hour. Hashing the key keeps it reproducible while giving the times the
+    irregularity real observations have.
     """
-    events: list[NearMissEvent] = []
-    for index, junction in enumerate(_JUNCTIONS):
-        ts = now - timedelta(hours=6 + index * 30)
-        events.append(_build_event(junction, ts, 700 + index * 2))
-    return events
+    digest = hashlib.sha256(f"ts::{key}".encode()).hexdigest()[:8]
+    unit = int(digest, 16) / 0xFFFFFFFF
+    return 2.0 + unit * (_HISTORY_WINDOW_HOURS - 2.0)
+
+
+def scripted_near_misses(now: datetime) -> list[NearMissEvent]:
+    """Every scripted near-miss event, independent of replay having run.
+
+    Deterministic and pure: same `now` in, same events out, spread unevenly
+    over the last week so `since`/bbox filtering on `GET /api/near-misses`
+    has something real to filter. Newest first.
+    """
+    events = [
+        _build_event(junction, now - timedelta(hours=_hours_ago(junction.key)), 700 + index * 2)
+        for index, junction in enumerate(_JUNCTIONS)
+    ]
+    return sorted(events, key=lambda event: event.ts, reverse=True)

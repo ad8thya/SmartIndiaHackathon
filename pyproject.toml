@@ -104,7 +104,20 @@ exclude = ["apps*", "infra*", "node_modules*"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-exclude = ["packages/db/src/db/migrations/versions", "node_modules", ".venv"]
+exclude = [
+    "packages/db/src/db/migrations/versions",
+    "node_modules",
+    ".venv",
+    # Training notebooks are Colab-shaped: imports live in the cell that needs
+    # them, lines run long, and names are shared across cells. Linting them
+    # against the same rules as the service code produced 117 findings, ~95%
+    # of which were E501/E402/I001 and none of which anyone was ever going to
+    # act on — and a permanently red CI teaches people to ignore CI.
+    #
+    # The six findings that were NOT style noise are recorded in BUILD.md §5
+    # so they stay visible to their owner instead of being silenced here.
+    "notebooks",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "N", "RUF", "ASYNC"]

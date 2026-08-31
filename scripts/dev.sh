@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Runs the four hot-reloading processes side by side and kills them all
+# Runs the five hot-reloading processes side by side and kills them all
 # together on Ctrl-C. Logs are prefixed and colourised so six people can read
 # one terminal.
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 cd "$(dirname "$0")/.."
+# `.env` supplies DEFAULTS. Anything already set in the caller's environment
+# wins — otherwise `API_PORT=8010 make demo` is silently ignored, because
+# `set -a; . ./.env` overwrites the variable the caller just passed. That made
+# the port-conflict advice below impossible to follow.
+_preset_api_port="${API_PORT:-}"
 set -a; [ -f .env ] && . ./.env; set +a
+[ -n "$_preset_api_port" ] && API_PORT="$_preset_api_port"
 
 VENV=.venv
 PY="$VENV/bin/python"
@@ -27,19 +33,26 @@ run() { # run <colour> <label> <cmd...>
   PIDS+=($!)
 }
 
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
+
 echo ""
 echo "  ┌──────────────────────────────────────────────────────────┐"
 echo "  │  URBAN TWIN is starting                                  │"
-echo "  │    command centre  →  http://localhost:5173              │"
-echo "  │    field app       →  http://localhost:5174              │"
-echo "  │    api docs        →  http://localhost:8000/docs         │"
+echo "  │    one app, one port →  http://localhost:5173            │"
+echo "  │      role picker     →  http://localhost:5173/           │"
+echo "  │      field app       →  http://localhost:5173/field      │"
+echo "  │    api docs          →  http://localhost:${API_PORT:-8000}/docs       │"
+if [ -n "$LAN_IP" ]; then
+echo "  │                                                            │"
+echo "  │  on your phone (same wifi):                               │"
+echo "  │    http://$LAN_IP:5173  (and /field)               │"
+fi
 echo "  └──────────────────────────────────────────────────────────┘"
 echo ""
 
 run 36 api    "$PY" -m uvicorn services.cloud.api.main:app --host 0.0.0.0 --port "${API_PORT:-8000}" --reload
 sleep 2
 run 35 replay "$PY" -m services.tools.replay --speed "${REPLAY_SPEED:-60}" --buses "${REPLAY_BUSES:-6}" --loop
-run 32 command npm --prefix apps/command run dev -- --host --port 5173
-run 33 field   npm --prefix apps/field   run dev -- --host --port 5174
+run 32 web    npm --prefix apps/web run dev -- --host --port 5173
 
 wait
