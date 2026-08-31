@@ -7,17 +7,19 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Bus, Check, ChevronRight, Circle, MapPin } from 'lucide-react';
+import { Bus, Check, ChevronRight, Circle, Loader2, MapPin, WifiOff } from 'lucide-react';
 import { MapScreen } from '../../components/map/MapScreen';
 import { BottomSheet } from '../../components/BottomSheet';
 import type { MapLine, MapMarker } from '../../components/map/UTMap';
 import { useMyBus } from '../../lib/useFleet';
 import { useEvents } from '../../lib/useEvents';
+import { useContributions } from '../../lib/useContributions';
 import { classLabel, timeAgo } from '../../lib/display';
 
 export function RouteScreen() {
   const { bus, route } = useMyBus();
   const { events } = useEvents();
+  const contributions = useContributions(bus?.bus_id ?? null);
   const [stopsOpen, setStopsOpen] = useState(false);
 
   /**
@@ -51,14 +53,15 @@ export function RouteScreen() {
   );
 
   /**
-   * What this bus found today, as a marker per defect on its own route.
+   * Fused defects sitting on this route. NOT "what this bus found" — an Event
+   * is a fusion of several buses' sightings and carries no attribution, so
+   * calling these the driver's would invent a fact the data does not hold.
+   * They are map pins, labelled "on this route".
    *
-   * Attribution is by route rather than by bus id: an Event is fused from
-   * several buses' observations and does not carry "which bus saw it first",
-   * so claiming a specific bus found a specific defect would be inventing a
-   * fact the data does not hold. "On your route today" is true.
+   * What this bus actually contributed comes from `contributions`, which
+   * counts its own observations since midnight.
    */
-  const contributed = useMemo(
+  const onRoute = useMemo(
     () =>
       (events ?? []).filter(
         (event) => route !== null && event.road_segment_id?.includes(route.route_id),
@@ -67,7 +70,7 @@ export function RouteScreen() {
   );
 
   const markers: MapMarker[] = useMemo(() => {
-    const pins: MapMarker[] = contributed.map((event) => ({
+    const pins: MapMarker[] = onRoute.map((event) => ({
       id: event.event_id,
       lat: event.lat,
       lon: event.lon,
@@ -83,7 +86,7 @@ export function RouteScreen() {
       });
     }
     return pins;
-  }, [contributed, bus]);
+  }, [onRoute, bus]);
 
   return (
     <div className="relative h-full">
@@ -104,7 +107,29 @@ export function RouteScreen() {
                   <Bus size={12} className="text-accent" />
                   {Math.round(bus.progress * 100)}% complete
                   <span className="text-ink-faint">·</span>
-                  {contributed.length} defect{contributed.length === 1 ? '' : 's'} found today
+                  {onRoute.length} defect{onRoute.length === 1 ? '' : 's'} on this route
+                </div>
+
+                {/* What THIS bus contributed, counted from its own detections
+                    since midnight — not the route-wide list above. */}
+                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-soft">
+                  {!contributions.loaded ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin text-ink-faint" />
+                      counting your detections…
+                    </>
+                  ) : contributions.error ? (
+                    <>
+                      <WifiOff size={12} className="text-ink-faint" />
+                      detections unavailable
+                    </>
+                  ) : (
+                    <>
+                      <Check size={12} className="text-emerald" />
+                      you reported {contributions.truncated ? 'at least ' : ''}
+                      {contributions.count} today
+                    </>
+                  )}
                 </div>
                 <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/[0.06]">
                   <div
@@ -136,7 +161,7 @@ export function RouteScreen() {
             </div>
           );
         }
-        const event = contributed.find((candidate) => candidate.event_id === id);
+        const event = onRoute.find((candidate) => candidate.event_id === id);
         if (!event) return null;
         return (
           <div className="px-4 pb-5 pt-4">

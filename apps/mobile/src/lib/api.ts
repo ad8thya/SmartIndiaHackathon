@@ -15,6 +15,7 @@ import type {
   HealthStatus,
   IncidentReport,
   IncidentResponse,
+  Observation,
   ReportCategory,
   ReportStatus,
   ResponseState,
@@ -121,6 +122,22 @@ export const api = {
   routes: () => request<UTRoute[]>('/api/routes/list'),
 
   roads: () => request<RoadCondition[]>('/api/roads'),
+
+  /**
+   * Raw detections, before fusion. The ONLY record that names a bus — an
+   * Event is a fusion of several and carries a count, not a list — so this is
+   * the only way to answer "what did MY bus contribute". Server-side it reads
+   * an in-memory ring buffer, so it is recent, not historical.
+   */
+  observations: (
+    params: {
+      [key: string]: unknown;
+      bus_id?: string;
+      route_id?: string;
+      since?: string;
+      limit?: number;
+    } = {},
+  ) => request<Observation[]>(`/api/observations${query(params)}`),
 
   incidents: (params: { [key: string]: unknown; limit?: number } = {}) =>
     request<IncidentReport[]>(`/api/incidents${query(params)}`),

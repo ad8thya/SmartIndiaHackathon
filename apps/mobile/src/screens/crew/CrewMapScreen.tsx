@@ -9,13 +9,14 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Clock, MapPin } from 'lucide-react';
 import { MapScreen } from '../../components/map/MapScreen';
+import { MapStatus } from '../../components/map/MapStatus';
 import type { MapMarker } from '../../components/map/UTMap';
 import { useEvents } from '../../lib/useEvents';
 import { isQueued, MY_TEAM, slaFor } from '../../lib/crew';
 import { classLabel, SEVERITY_HEX, severityChipClass, timeAgo } from '../../lib/display';
 
 export function CrewMapScreen() {
-  const { events } = useEvents();
+  const { events, error } = useEvents();
 
   const queue = useMemo(
     () =>
@@ -45,6 +46,14 @@ export function CrewMapScreen() {
       markers={markers}
       emptyHint={`Nothing assigned to ${MY_TEAM} right now. Orders appear here as the console assigns them.`}
       overlay={
+        <div className="flex flex-col items-start gap-2">
+        <MapStatus
+          loading={events === null}
+          error={error}
+          count={queue.length}
+          emptyLabel={`Nothing assigned to ${MY_TEAM}`}
+          countLabel={(n) => `${n} order${n === 1 ? '' : 's'} in your queue`}
+        />
         <div className="pointer-events-auto inline-flex items-center gap-2.5 rounded-full border border-line bg-card/95 px-3 py-1.5 text-[11px] font-medium shadow-[0_1px_4px_rgba(0,0,0,0.08)] backdrop-blur">
           <span className="flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ background: SEVERITY_HEX.LARGE }} />
@@ -58,6 +67,7 @@ export function CrewMapScreen() {
             <span className="h-2 w-2 rounded-full" style={{ background: SEVERITY_HEX.SMALL }} />
             small
           </span>
+        </div>
         </div>
       }
       renderDetail={(id) => {

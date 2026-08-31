@@ -23,6 +23,7 @@
 import { useMemo } from 'react';
 import { Info, MapPin } from 'lucide-react';
 import { MapScreen } from '../../components/map/MapScreen';
+import { MapStatus } from '../../components/map/MapStatus';
 import type { MapMarker } from '../../components/map/UTMap';
 import { toPublicEvent, useEvents } from '../../lib/useEvents';
 import {
@@ -35,7 +36,7 @@ import {
 } from '../../lib/display';
 
 export function RoadConditionsScreen() {
-  const { events } = useEvents({ publicOnly: true });
+  const { events, error } = useEvents({ publicOnly: true });
 
   const publicEvents = useMemo(
     () =>
@@ -65,10 +66,13 @@ export function RoadConditionsScreen() {
         markers={markers}
         emptyHint="Nothing confirmed near here yet. Only problems the city has been told about appear on this map."
         overlay={
-          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-line bg-card/95 px-3 py-1.5 text-[11px] font-medium shadow-[0_1px_4px_rgba(0,0,0,0.08)] backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald" />
-            {publicEvents.length} confirmed nearby
-          </div>
+          <MapStatus
+            loading={events === null}
+            error={error}
+            count={publicEvents.length}
+            emptyLabel="Nothing confirmed near here"
+            countLabel={(n) => `${n} confirmed nearby`}
+          />
         }
         renderDetail={(id) => {
           const event = publicEvents.find((candidate) => candidate.event_id === id);

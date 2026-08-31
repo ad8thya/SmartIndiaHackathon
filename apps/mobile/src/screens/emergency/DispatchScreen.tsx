@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Ambulance, Clock, MapPin, Navigation, Ruler } from 'lucide-react';
+import { Ambulance, Clock, CloudOff, Loader2, MapPin, Navigation, Ruler } from 'lucide-react';
 import { MapScreen } from '../../components/map/MapScreen';
 import type { MapLine, MapMarker } from '../../components/map/UTMap';
 import { useLive } from '../../store/live';
@@ -24,6 +24,8 @@ const ASSUMED_KMPH = 28;
 export function DispatchScreen() {
   const incidents = useLive((s) => s.incidents);
   const responses = useLive((s) => s.responses);
+  const hydrated = useLive((s) => s.hydrated);
+  const loadError = useLive((s) => s.loadError);
   const { state: geo, locate } = useGeolocation();
 
   useEffect(() => {
@@ -72,6 +74,30 @@ export function DispatchScreen() {
         : [],
     [target, from],
   );
+
+  if (!hydrated) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+        <Loader2 size={26} className="animate-spin text-ink-faint" />
+        <p className="mt-3 text-[14px] text-ink-soft">Loading your active incident…</p>
+      </div>
+    );
+  }
+
+  if (loadError && !target) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+        <span className="flex h-16 w-16 items-center justify-center rounded-[18px] bg-amber/15 text-amber">
+          <CloudOff size={28} />
+        </span>
+        <h1 className="mt-4 text-[18px] font-medium">Cannot reach the control room</h1>
+        <p className="mt-2 max-w-[300px] text-[14px] leading-relaxed text-ink-soft">
+          Anything you accepted was sent. This screen fills in as soon as you have signal — use
+          your radio in the meantime.
+        </p>
+      </div>
+    );
+  }
 
   if (!target) {
     return (

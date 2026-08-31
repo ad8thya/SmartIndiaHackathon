@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, WifiOff } from 'lucide-react';
 import { BlockRenderer } from '../../components/blocks/BlockRenderer';
 import type { Block } from '../../components/blocks/types';
 import { classLabel, timeAgo } from '../../lib/display';
@@ -18,10 +18,26 @@ export function LogScreen() {
   const incidents = useLive((s) => s.incidents);
   const responses = useLive((s) => s.responses);
   const hydrated = useLive((s) => s.hydrated);
+  const loadError = useLive((s) => s.loadError);
   const advance = useDispatch((s) => s.advance);
 
   const blocks = useMemo<Block[]>(() => {
     if (!hydrated) return [{ kind: 'skeleton', id: 'loading', rows: 3 }];
+
+    // "Nothing logged" and "I could not reach the control room" are different
+    // facts, and showing the first when the second is true is the stale-data
+    // lie this app is not allowed to tell.
+    if (loadError) {
+      return [
+        {
+          kind: 'empty',
+          id: 'offline',
+          icon: WifiOff,
+          title: 'Cannot reach the control room',
+          sub: 'Your shift log will appear here as soon as you have signal. Anything you already closed was sent.',
+        },
+      ];
+    }
 
     const closed = incidents.filter(
       (incident) => responses[incident.incident_id]?.state === 'CLOSED',
@@ -110,7 +126,7 @@ export function LogScreen() {
     });
 
     return list;
-  }, [incidents, responses, hydrated, advance]);
+  }, [incidents, responses, hydrated, loadError, advance]);
 
   return <BlockRenderer blocks={blocks} />;
 }

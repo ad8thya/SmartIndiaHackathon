@@ -30,8 +30,34 @@ export const QUEUE_STATUSES: readonly WorkflowStatus[] = [
 /** Rungs where the work is done but a bus has not re-scanned it yet. */
 export const AWAITING_VERIFICATION: readonly WorkflowStatus[] = ['REPAIR_COMPLETED'];
 
+/**
+ * The classes a road crew can actually be dispatched to.
+ *
+ * Mirrors `INFRASTRUCTURE_CLASSES` in the contracts. The status ladder is
+ * shared by every detection class, so an escalated COLLISION or NEAR_MISS
+ * reaches AUTHORITY_NOTIFIED exactly like a pothole does — and without this
+ * guard it lands in a maintenance queue with an SLA countdown, an IRC:82
+ * severity and a "recommended treatment", none of which mean anything for a
+ * road-traffic incident. Those belong to Emergency Team.
+ *
+ * Latent rather than theoretical: on the seeded network no safety class has
+ * escalated that far yet, so this fires zero times today and would fire
+ * silently the first time one does.
+ */
+const CREW_CLASSES: readonly string[] = [
+  'POTHOLE',
+  'LONGITUDINAL_CRACK',
+  'TRANSVERSE_CRACK',
+  'ALLIGATOR_CRACK',
+  'WATERLOGGING',
+  'DAMAGED_DIVIDER',
+  'DAMAGED_SIGN',
+  'ZEBRA_CROSSING',
+];
+
+/** True when this is road work, at a rung where somebody owns it. */
 export function isQueued(event: UTEvent): boolean {
-  return QUEUE_STATUSES.includes(event.status);
+  return QUEUE_STATUSES.includes(event.status) && CREW_CLASSES.includes(event.detection_class);
 }
 
 /**

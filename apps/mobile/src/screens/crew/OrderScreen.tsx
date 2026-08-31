@@ -76,9 +76,24 @@ export function OrderScreen() {
     void api
       .event(eventId)
       .then(setEvent)
-      .catch((cause: unknown) =>
-        setLoadError(cause instanceof Error ? cause.message : 'could not load this order'),
-      );
+      .catch((cause: unknown) => {
+        // Never surface the raw body. `ApiError.message` carries up to 200
+        // characters of whatever the server said — for a 404 that is
+        // `{"detail":"no event 0000…"}`, which reads as a crash to a crew
+        // standing in the road. Map the status to something actionable and
+        // keep the detail in the console for whoever is debugging.
+        if (cause instanceof ApiError) {
+          console.warn('order load failed', cause.status, cause.message);
+          setLoadError(
+            cause.status === 404
+              ? 'This work order no longer exists. It may have been closed or reassigned.'
+              : 'The city service could not be reached. Your queue still works offline.',
+          );
+          return;
+        }
+        console.warn('order load failed', cause);
+        setLoadError('Something went wrong opening this order.');
+      });
     locate();
   }, [eventId, locate]);
 

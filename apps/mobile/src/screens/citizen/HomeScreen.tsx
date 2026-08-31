@@ -8,7 +8,7 @@
  */
 
 import { useMemo } from 'react';
-import { Lightbulb } from 'lucide-react';
+import { CloudOff, Lightbulb } from 'lucide-react';
 import { BlockRenderer } from '../../components/blocks/BlockRenderer';
 import type { Block } from '../../components/blocks/types';
 import { useSession } from '../../store/session';
@@ -16,7 +16,7 @@ import { useMyReports } from '../../lib/useReports';
 
 export function CitizenHomeScreen() {
   const session = useSession((s) => s.session)!;
-  const { reports } = useMyReports();
+  const { reports, error } = useMyReports();
 
   const open = (reports ?? []).filter(
     (report) => report.status !== 'RESOLVED' && report.status !== 'REJECTED',
@@ -34,9 +34,10 @@ export function CitizenHomeScreen() {
       {
         kind: 'guide',
         id: 'guide',
-        icon: Lightbulb,
-        text:
-          open > 0
+        icon: error ? CloudOff : Lightbulb,
+        text: error
+          ? 'You are offline. You can still write a report — it will need signal to send.'
+          : open > 0
             ? `You have ${open} report${open === 1 ? '' : 's'} still open. Tap “My reports” to see where ${open === 1 ? 'it has' : 'they have'} got to.`
             : 'A photo and your location are enough. Everything else is optional.',
       },
@@ -66,7 +67,7 @@ export function CitizenHomeScreen() {
             id: 'reports',
             emoji: '📋',
             title: 'My reports',
-            sub: open > 0 ? `${open} still open` : 'What happened to what you sent',
+            sub: error ? 'Tap to retry' : open > 0 ? `${open} still open` : 'What happened to what you sent',
             to: '/citizen/reports',
             accent: '#D97706',
             tint: 'rgba(217,119,6,0.12)',
@@ -88,7 +89,7 @@ export function CitizenHomeScreen() {
         text: `Signed in as ${session.displayName}. Your name is shown to the municipal staff handling your report, and to nobody else.`,
       },
     ],
-    [open, session.displayName],
+    [open, error, session.displayName],
   );
 
   return <BlockRenderer blocks={blocks} />;
