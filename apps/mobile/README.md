@@ -1,7 +1,8 @@
 # apps/mobile — the phone app
 
 Four field roles: **Citizen**, **Road Maintenance**, **Bus Driver**, **Emergency
-Team**. The other four roles decide things at a desk and live in `apps/web`.
+Team**. The other four roles decide things at a desk and live in the console
+repository, which is a separate repo and a separate deploy.
 
 Web decides, phone acts. Both are clients of the same FastAPI process and the
 same `/ws/live` socket; nothing goes phone → web directly.
@@ -112,19 +113,24 @@ three divergent hand-written copies already caused a real bug here (BUILD.md
 
 ## The basemap is borrowed
 
-`public/map` is a symlink to `apps/web/public/map`. Dev serves the extract
-through it; the production build deletes `dist/map` because both apps are
-served from one origin, so `/map` already resolves to `apps/web`'s copy. One
-extract in git, one on disk, one in the image — see `vite.config.ts`.
+`public/map` is a symlink to the repo-level `assets/map`, which belongs to no
+app. Dev serves the extract through it; the production build deletes
+`dist/map` because the API serves `/map` from `MAP_DIR` unconditionally — see
+`vite.config.ts` and `services/cloud/api/spa.py::mount_map`. One extract in
+git, one on disk, one in the image.
+
+**HTTP Range is load-bearing.** pmtiles reads byte slices out of the archive
+rather than downloading 17 MB up front, so anything serving `/map` must answer
+`206`, not `200` with the whole file.
 
 ## Palette
 
 Tokens in `tailwind.config.js` are transcribed from the design canvas export
 (`Frontend1.zip` → `index1.html`), not invented. Where the design and
-`apps/web` disagree, the design wins here, because this app is a rebuild of
+the console disagree, the design wins here, because this app is a rebuild of
 that comp.
 
-The one deliberate difference from `apps/web`: the console's accent is its own,
+The one deliberate difference from the console: its accent is its own,
 while this app uses the design's `#2563EB` throughout, and reserves the emerald
 gradient for the citizen hero banner — the only gradient in the app.
 

@@ -33,12 +33,12 @@ boundaries, no branches.
 
 | Member | Owns |
 |---|---|
-| M1 | `services/edge/defects/**`, `apps/web/src/panels/DefectsPanel.tsx` |
-| M2 | `services/cloud/intelligence/traffic_analytics/**`, `services/cloud/intelligence/whatif/**`, `services/cloud/intelligence/recommend/**`, `apps/web/src/panels/TrafficPanel.tsx`, `apps/web/src/panels/WhatIfPanel.tsx` |
-| M3 | `services/edge/pedestrian/**`, `services/cloud/consensus/**`, `services/cloud/intelligence/urban_risk/**`, `apps/web/src/panels/RiskPanel.tsx` |
-| M4 | `services/edge/incidents/**`, `apps/web/src/panels/IncidentsPanel.tsx` |
+| M1 | `services/edge/defects/**` (+ `DefectsPanel.tsx` in the console repo) |
+| M2 | `services/cloud/intelligence/traffic_analytics/**`, `services/cloud/intelligence/whatif/**`, `services/cloud/intelligence/recommend/**`, `TrafficPanel.tsx` (console repo), `WhatIfPanel.tsx` (console repo) |
+| M3 | `services/edge/pedestrian/**`, `services/cloud/consensus/**`, `services/cloud/intelligence/urban_risk/**`, `RiskPanel.tsx` (console repo) |
+| M4 | `services/edge/incidents/**` (+ `IncidentsPanel.tsx` in the console repo) |
 | M5 | `services/cloud/api/**`, `services/tools/replay/**`, `packages/db/**`, `scripts/**` |
-| M6 | `apps/web/src/**` (except `panels/`) — the shell, map, layout, field and role screens |
+| M6 | `apps/mobile/src/**` — the phone app; the console lives in its own repo |
 
 `packages/contracts` is owned by everyone and changed by nobody without an ACK.
 See below.
@@ -204,7 +204,7 @@ pushing a mess.
 Python is enforced by tooling — run `make fmt` and stop thinking about it.
 Ruff at 100 columns, mypy strict on `packages/`.
 
-TypeScript: `npm run typecheck` in `apps/web`. Strict mode, no `any` without a
+TypeScript: `npm run typecheck` in `apps/mobile`. Strict mode, no `any` without a
 comment saying why.
 
 Two conventions the tools cannot enforce:

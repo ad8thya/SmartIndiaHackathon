@@ -53,7 +53,6 @@ wandb/
 apps/*/tsconfig.tsbuildinfo
 
 # vite build output
-apps/web/dist/
 
 # `make mine` — which module you own (per-person, not shared)
 .member

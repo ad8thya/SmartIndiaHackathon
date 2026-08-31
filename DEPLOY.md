@@ -1,6 +1,6 @@
 # Deploying URBAN TWIN
 
-> **One image, one port.** `infra/Dockerfile` builds `apps/web` with vite and
+> **One image, one port.** `infra/Dockerfile` builds `apps/mobile` with vite and
 > copies the result into the python image; FastAPI serves those static files
 > itself (`services/cloud/api/spa.py`). There is no nginx, no second container,
 > and — because the UI and the API are the same origin — no CORS to configure.
@@ -193,7 +193,7 @@ Only do this if you want the UI on a CDN and the API somewhere else. It is
 strictly more configuration than the one-container path, and it reintroduces
 CORS.
 
-1. Vercel project → **Root directory** `apps/web`, framework **Vite**.
+1. Vercel project → **Root directory** `apps/mobile` (or the console repo's root), framework **Vite**.
 2. Build-time variables (vite inlines `VITE_*` at build, not at runtime — a
    change here needs a redeploy):
    ```
@@ -204,12 +204,12 @@ CORS.
    ```
    CORS_ORIGINS=https://your-app.vercel.app
    ```
-4. `apps/web/public/map/chennai.pmtiles` is 17 MB. Vercel serves it fine and
+4. `assets/map/chennai.pmtiles` is 17 MB. Vercel serves it fine and
    honours Range requests, which pmtiles needs — but check your plan's limits
    before assuming it is free.
 
 **SPA routing is already handled** in the one-container path by the catch-all
-in `spa.py`. On Vercel, add `apps/web/vercel.json` with a rewrite of
+in `spa.py`. On Vercel, add a `vercel.json` with a rewrite of
 `/(.*)` → `/index.html`, or a refresh on `/app/citizen` will 404.
 
 ---

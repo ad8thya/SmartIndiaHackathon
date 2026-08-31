@@ -55,8 +55,8 @@ mock for real code is a one-line change inside one folder that no other file obs
 | **api** | M5 | n/a — real | **Real.** 29 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/cloud/api/**` |
 | **db** | M5 | n/a — real | **Real.** 11 tables, PostGIS Geography, 3 migrations, autogenerate verified empty | `packages/db/**` |
 | **contracts** | shared | n/a | **Real, and FROZEN (v1.3.0).** 8 Protocols, 20 models, pure fusion maths. Three approved amendments applied — see §10, §12 and §13 | `packages/contracts/**` (team decision) |
-| **frontend — console** | M6 | n/a — real | **Real.** `apps/web`: role picker, all 8 role views, and a phone-shaped view of the console at `/field`. Real offline basemap (committed PMTiles), real 3D buildings, contract types generated from `packages/contracts` | `apps/web/src/**` |
-| **frontend — phone** | M6 | n/a — real | **Real.** `apps/mobile`: the four field roles (Citizen, Road Maintenance, Bus Driver, Emergency Team), installable PWA, real MapLibre + PMTiles map rendering with zero network, one live WebSocket, and a visible permission boundary. Borrows apps/web's basemap by symlink — 0 added bytes. Shares the generated contract types; `make smoke` fails if the two copies ever differ | `apps/mobile/**` |
+| **frontend — console** | M6 | n/a — real | **Real, and MOVED.** Role picker, all 8 role views, real 3D buildings. Split out to its own repository on 31 Aug 2026 — it consumes this API over HTTP/WS and installs `@urban-twin/contracts` | *(separate repo)* |
+| **frontend — phone** | M6 | n/a — real | **Real.** `apps/mobile`: the four field roles (Citizen, Road Maintenance, Bus Driver, Emergency Team), installable PWA, real MapLibre + PMTiles map rendering with zero network, one live WebSocket, and a visible permission boundary. Reads the shared basemap at `assets/map` by symlink — 0 added bytes. Contract types generated from `packages/contracts`; `make contracts-check` fails on drift | `apps/mobile/**` |
 
 ### What the mocks actually produce
 
@@ -123,7 +123,7 @@ services/<module>/
          REST  │                          │  WS /ws/live
                ▼                          ▼
    ┌─────────────────────────────────────────────────────┐
-   │  M6 apps/web — ONE app, ONE port, :5173              │
+   │  M6 apps/mobile — the phone app, :5176              │
    │  MapLibre + deck.gl command centre at /app/:role ·   │
    │  mobile view (Feed · Detail · Map · MyTasks) — /field │
    └─────────────────────────────────────────────────────┘
@@ -239,11 +239,11 @@ written *only by `scripts/seed.py`*. The MQTT bridge puts them in memory and now
 ### ~~The frontend contract is hand-mirrored three times~~ — fixed
 
 **Resolved in the consolidation build.** The three Vite apps (`command`,
-`field`, `roles`) are now one app, `apps/web`, and its contract types are
+`field`, `roles`) were merged into one console app, since split to its own repo; contract types are
 **generated** from `packages/contracts` by `scripts/gen_frontend_types.py`
 (`make types`). It introspects the actual pydantic models and StrEnums, so a
 rename in `enums.py` cannot silently leave the frontend behind the way
-`MISSING_SIGN` / `FADED_ZEBRA` did. `apps/web/src/lib/types.ts` carries a
+`MISSING_SIGN` / `FADED_ZEBRA` did. `apps/mobile/src/lib/types.ts` carries a
 do-not-edit header; the generator is deterministic, so CI can diff it.
 
 `src/field/lib/api.ts` and `src/roles/lib/api.ts` still exist but hold only
@@ -315,7 +315,7 @@ Settled. Do not reopen these mid-week without a team conversation.
 | | Count | Command |
 |---|---|---|
 | Python tests | **257** | `make test-py` / `.venv/bin/pytest` |
-| Frontend tests | **38** (3 files) | `cd apps/web && npm run test -- --run` |
+| Frontend tests | **58** (6 files) | `cd apps/mobile && npm run test -- --run` |
 | Smoke checks | **34** | `make smoke` |
 | Everything | | `make test` |
 
@@ -374,7 +374,7 @@ or pass it per command: `MEMBER=m3 make mine`. With neither, it runs everything.
 | m3 | `services/edge/pedestrian`, `services/cloud/consensus`, `services/cloud/intelligence/urban_risk` |
 | m4 | `services/edge/incidents` (includes `near_miss.py` + its tests) |
 | m5 | `services/cloud/api`, `packages/db`, `scripts` |
-| m6 | `packages/contracts` (+ `npm run test` in `apps/web`) |
+| m6 | `packages/contracts` (+ `npm run test` in `apps/mobile`) |
 
 ### Quality gates
 
@@ -396,11 +396,11 @@ This repo was produced by four prompt passes: **scaffold → verify → fix → 
 
 | Phase | What happened |
 |---|---|
-| **Scaffold** | Whole repo generated in one pass: contracts, six modules with mocks and stubs, API, DB, the frontends (since merged into `apps/web`), tooling, docs |
+| **Scaffold** | Whole repo generated in one pass: contracts, six modules with mocks and stubs, API, DB, the frontends (since merged into one console app, then split to its own repo), tooling, docs |
 | **Verify** | 34-point audit against live infrastructure — real containers, PostGIS queries, `mosquitto_sub` roundtrips, headless Chrome over CDP for the UI. Report produced, no fixes applied |
 | **Fix** | 12 fixes applied P0→P4, each re-verified. 2 items declined with reasons. 7 findings deferred and annotated in code |
 | **Ship** | History rewritten into 8 logical commits, 6 member branches created, pushed |
-| **Consolidate** | 31 Aug 2026 — the three frontends merged into `apps/web`, `m4-incidents` merged back into `main`, and all six member branches deleted. `main` is now the only branch |
+| **Consolidate** | 31 Aug 2026 — the three frontends merged into one console app, `m4-incidents` merged back into `main`, and all six member branches deleted. `main` is now the only branch |
 
 ```
 f02e22b  chore: project scaffold, docker compose, tooling         13 files,   +758
@@ -594,7 +594,7 @@ valid construction of every model still validates.
 | `citizen_reports` table + migration `0002` | `packages/db/**` (9 → **10** tables) |
 | `POST/GET /api/reports`, `GET /api/reports/{id}`, `GET /api/reports/photos/{f}` | `services/cloud/api/routers/reports.py` |
 | `MEDIA_DIR` | `services/cloud/api/config.py` |
-| `Reports` panel | `apps/web/src/panels/ReportsPanel.tsx` |
+| `Reports` panel | `ReportsPanel.tsx` (console repo) |
 
 `alembic revision --autogenerate` comes back **empty** after `0002` — verified,
 same acceptance test as `0001`.

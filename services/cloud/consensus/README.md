@@ -43,7 +43,7 @@ two events. That is exactly what `impl.py` fixes.
 ```
 services/edge/pedestrian/   (your other half)
 services/cloud/consensus/                  (this module)
-apps/web/src/panels/RiskPanel.tsx
+RiskPanel.tsx  (in the console repo)
 ```
 
 ## Run it standalone

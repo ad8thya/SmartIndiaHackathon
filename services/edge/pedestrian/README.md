@@ -23,7 +23,7 @@ Invariants:
 ```
 services/edge/pedestrian/   (this module)
 services/cloud/consensus/                  (your other half — see its README)
-apps/web/src/panels/RiskPanel.tsx
+RiskPanel.tsx  (in the console repo)
 ```
 
 ## Mock behaviour

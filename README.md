@@ -160,7 +160,7 @@ below is what each `USE_REAL_*` flag is swapping towards, one module at a time.
 | Event validation & multi-bus consensus | `services/cloud/consensus` — noisy-OR confidence + the `DETECTED → AI_VERIFIED → AUTHORITY_NOTIFIED` ladder |
 | Central database | PostGIS on Postgres (`packages/db`) |
 | AI Intelligence Layer | `services/cloud/intelligence/urban_risk` (Urban Risk Index), `services/cloud/intelligence/recommend` (Maintenance Recommendation Engine), `services/cloud/intelligence/traffic_analytics` + `services/cloud/intelligence/whatif` (congestion / route delay), `services/edge/incidents/near_miss.py` (incident + near-miss severity) |
-| GIS & Digital Twin | `apps/web` — MapLibre + deck.gl over a committed PMTiles basemap, 3D twin at 45° pitch, road-health / congestion / risk-band layers |
+| GIS & Digital Twin | the console (own repo) — MapLibre + deck.gl over a committed PMTiles basemap, 3D twin at 45° pitch, road-health / congestion / risk-band layers |
 | Maintenance workflow automation | `Event.status` ladder + `WorkOrder` (`packages/db`), driven from the command console and, since T4, from the crew's phone in `apps/mobile` (Start inspection → Mark repaired, PATCHing the same endpoint the console does). Closing the loop (next bus re-scans a repaired segment and auto-verifies it) is scaffolded but not built — see `services/cloud/repair_verification/README.md` |
 | End users (RBAC) | All eight roles are built, in one app: `/app/:role`. The six operator roles get the desktop console; Citizen and Bus Driver get purpose-built phone-shaped screens |
 
@@ -180,7 +180,7 @@ All eight are built and live at `/app/:role` in the one app.
 | Urban Planner | Analytics | Export | Full Analytics | ❌ | ❌ |
 | Smart City Admin | Everything | Everything | Everything | Everything | ✅ |
 
-Full matrix and per-role notes: `apps/web/README.md`. The Citizen row is the
+Full matrix and per-role notes: the console repo's README. The Citizen row is the
 one place the RBAC split changes the *data* rather than the layout — the
 public map is served only confirmed, acted-on events, with no confidence
 scores or bus ids attached.
@@ -312,7 +312,7 @@ pass `MEMBER=m3` explicitly each time.
 **Files you own**
 ```
 services/edge/defects/**
-apps/web/src/panels/DefectsPanel.tsx
+DefectsPanel.tsx  (console repo)
 ```
 
 **Your Protocol**
@@ -352,9 +352,9 @@ type chips, evidence thumbnails, SLA countdown per row.
 services/cloud/intelligence/traffic_analytics/**
 services/cloud/intelligence/whatif/**
 services/cloud/intelligence/recommend/**                        (AI intelligence layer — added v1.1.0)
-apps/web/src/panels/TrafficPanel.tsx
-apps/web/src/panels/WhatIfPanel.tsx
-apps/web/src/panels/IntelligencePanel.tsx (you contribute; M3 owns the file)
+TrafficPanel.tsx  (console repo)
+WhatIfPanel.tsx  (console repo)
+IntelligencePanel.tsx  (console repo; you contribute, M3 owns it)
 ```
 
 **Your Protocols**
@@ -405,8 +405,8 @@ go/no-go verdict.
 services/edge/pedestrian/**
 services/cloud/consensus/**
 services/cloud/intelligence/urban_risk/**                              (AI intelligence layer — added v1.1.0)
-apps/web/src/panels/RiskPanel.tsx
-apps/web/src/panels/IntelligencePanel.tsx  (you own this one; M2 contributes)
+RiskPanel.tsx  (console repo)
+IntelligencePanel.tsx  (console repo; you own it, M2 contributes)
 ```
 
 **Your Protocols**
@@ -463,7 +463,7 @@ flags: `USE_REAL_PEDESTRIAN`, `USE_REAL_FUSION`, `USE_REAL_RISK`
 **Files you own**
 ```
 services/edge/incidents/**
-apps/web/src/panels/IncidentsPanel.tsx
+IncidentsPanel.tsx  (console repo)
 ```
 
 **Your Protocol**
@@ -538,13 +538,12 @@ so you are never blocked on your own merge conflicts.
 
 **Files you own**
 ```
-apps/web/src/{CommandApp,main}.tsx, components/**, lib/**, store/**, styles/**, test/**
-apps/web/src/field/**                          (phone-shaped view of the console, at /field)
-apps/web/src/roles/**                          (the role shell + phone screens)
 apps/mobile/**                                 (the phone app — 4 field roles)
+assets/map/**                                  (the shared offline basemap)
+   the desktop console moved to its own repository
 scripts/fetch_buildings.py, scripts/gen_frontend_types.py
 ```
-You do **not** own `apps/web/src/panels/*` — those belong to M1–M4.
+The console's panels belong to M1–M4, in that repo.
 
 **Your contract with the panel owners** — every panel receives exactly:
 ```ts
@@ -553,7 +552,7 @@ You do **not** own `apps/web/src/panels/*` — those belong to M1–M4.
 and is mounted inside an `ErrorBoundary` labelled with its owner, so a crash is
 contained and routes itself to the right person.
 
-**Your commands** · `cd apps/web && npm run test` · `make buildings` · `make types`
+**Your commands** · `cd apps/mobile && npm run test` · `make types` · `make contracts-check`
 
 **7-day plan**
 
@@ -691,10 +690,10 @@ In order of likelihood:
 2. **The base map failed to load.** Unlikely now — `lib/mapStyle.ts` reads a
    PMTiles archive committed to this repo and served by the app itself, with
    no CDN and no API key. If the streets are missing but buildings, routes and
-   buses render, check that `apps/web/public/map/chennai.pmtiles` survived the
+   buses render, check that `assets/map/chennai.pmtiles` survived the
    clone (it is ~17 MB; a partial or LFS-less checkout can drop it).
 3. **No buildings file.** `make buildings` writes
-   `apps/web/public/data/buildings.geojson` — 7,177 real OSM footprints,
+   `buildings.geojson` (console repo) — 7,177 real OSM footprints,
    bounded to the six seeded routes + 500 m, filtered to buildings that declare
    `height` or `building:levels` (~1.8 MB). Dropping the filter pulls 146k
    footprints and 31 MB, which deck.gl will render but nobody wants in git.

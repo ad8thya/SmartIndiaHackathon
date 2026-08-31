@@ -33,7 +33,7 @@ services/edge/incidents/
   impl.py          ← your real detector + PaddleOCR work
   factory.py       get_incident_detector()
   test_module.py
-apps/web/src/panels/IncidentsPanel.tsx
+IncidentsPanel.tsx  (in the console repo)
 ```
 
 ## Mock behaviour — the demo's set piece
