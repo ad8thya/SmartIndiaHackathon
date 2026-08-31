@@ -6,14 +6,24 @@
  * the status of this person's own reports — and says where each one came from.
  * A fabricated "Water supply disruption in Ward 173" would demo better and be
  * a lie about a capability that does not exist.
+ *
+ * **"Their ward" is proximity, and the screen says so.** Chennai has 200 wards
+ * and this project does not have their boundaries, so scoping by ward id would
+ * mean inventing one. What it does instead is scope to a radius around the
+ * phone and label it as a radius. If the phone has no fix, the scope falls
+ * back to everything and the header says "across the city" rather than
+ * implying a local filter that is not running — a list quietly showing the
+ * whole city under the word "nearby" is the failure worth avoiding here.
  */
 
-import { useMemo } from 'react';
-import { Bell, MapPin, WifiOff, Wrench } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { Bell, MapPin, Navigation, WifiOff, Wrench } from 'lucide-react';
 import { BlockRenderer } from '../../components/blocks/BlockRenderer';
 import type { Block } from '../../components/blocks/types';
 import { toPublicEvent, useEvents } from '../../lib/useEvents';
 import { useMyReports } from '../../lib/useReports';
+import { useGeolocation } from '../../lib/useGeolocation';
+import { distanceLabel, distanceM } from '../../lib/display';
 import {
   CATEGORY_LABEL,
   classLabel,
@@ -23,10 +33,20 @@ import {
   timeAgo,
 } from '../../lib/display';
 
+/** What counts as "near you". A walkable radius, not a ward boundary. */
+const NEARBY_RADIUS_M = 2_000;
+
 export function AlertsScreen() {
   const { events, error: eventsError } = useEvents({ publicOnly: true });
   const { reports, error: reportsError } = useMyReports();
+  const { state: geo, locate } = useGeolocation();
   const offline = eventsError !== null && reportsError !== null;
+
+  useEffect(() => {
+    locate();
+  }, [locate]);
+
+  const here = geo.status === 'ok' ? { lat: geo.lat, lon: geo.lon } : null;
 
   const blocks = useMemo<Block[]>(() => {
     if (events === null && reports === null) {
@@ -71,7 +91,26 @@ export function AlertsScreen() {
       );
     }
 
-    const nearby = (events ?? []).filter((event) => isPublic(event.status)).map(toPublicEvent);
+    const all = (events ?? []).filter((event) => isPublic(event.status)).map(toPublicEvent);
+
+    // Scoped only when there is a real fix to scope against. Without one the
+    // list is city-wide and the banner below says exactly that.
+    const nearby = here
+      ? all.filter((event) => distanceM(here, event) <= NEARBY_RADIUS_M)
+      : all;
+
+    // Built here, prepended at the end. Pushing it now would make `list`
+    // non-empty and quietly kill the empty state below — the banner is chrome
+    // describing the scope, not a notice in its own right.
+    const scopeBanner: Block = {
+      kind: 'guide',
+      id: 'scope',
+      icon: here ? MapPin : Navigation,
+      tone: here ? 'accent' : 'neutral',
+      text: here
+        ? `Showing problems and repairs within ${distanceLabel(NEARBY_RADIUS_M)} of you.`
+        : 'Showing the whole city — turn on location to see only what is near you.',
+    };
 
     // Repairs finishing are the good news, and the only thing on this screen
     // that a person is likely to actually want to be told.
@@ -130,8 +169,10 @@ export function AlertsScreen() {
           kind: 'empty',
           id: 'quiet',
           icon: Bell,
-          title: 'Nothing to tell you',
-          sub: 'Updates about your reports, and confirmed problems and repairs near you, appear here.',
+          title: here ? 'Nothing near you right now' : 'Nothing to tell you',
+          sub: here
+            ? `No confirmed problems or repairs within ${distanceLabel(NEARBY_RADIUS_M)}, and nothing new on your reports.`
+            : 'Updates about your reports, and confirmed problems and repairs near you, appear here.',
           action: { label: 'See road conditions', to: '/citizen/conditions' },
         },
       ];
@@ -144,8 +185,8 @@ export function AlertsScreen() {
       text: 'These notices are drawn from confirmed road conditions and from your own reports. Urban Twin does not send push notifications.',
     });
 
-    return list;
-  }, [events, reports, offline]);
+    return [scopeBanner, ...list];
+  }, [events, reports, offline, here]);
 
   return <BlockRenderer blocks={blocks} />;
 }

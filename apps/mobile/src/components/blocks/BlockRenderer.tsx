@@ -12,6 +12,7 @@
  * seconds to finish appearing.
  */
 
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
@@ -469,21 +470,62 @@ function ActionButton({
   );
 }
 
-/** Counts up to the value. Numbers only — a string is rendered as-is. */
+/**
+ * Counts from the previous value to the new one.
+ *
+ * Not decoration: on a live screen a KPI changes because something happened —
+ * an order was assigned, a report came in over the socket — and a number that
+ * simply swaps is a change you can miss while looking straight at it. The
+ * count draws the eye to the one tile that moved.
+ *
+ * It animates the *delta*, so the first render (0 → 4) rolls and a later
+ * 4 → 5 ticks by one rather than replaying from zero. Reduced motion and a
+ * jump of one both skip straight to the value; a counter is exactly the kind
+ * of movement `prefers-reduced-motion` exists to suppress.
+ */
 function AnimatedValue({ value, tone }: { value: string | number; tone?: Tone }) {
   const colour = tone ? TONE_CHIP[tone].split(' ')[1] : '';
+  const [shown, setShown] = useState(typeof value === 'number' ? value : 0);
+  const previous = useRef(typeof value === 'number' ? value : 0);
+
+  useEffect(() => {
+    if (typeof value !== 'number') return;
+
+    const from = previous.current;
+    previous.current = value;
+
+    const reduced =
+      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduced || Math.abs(value - from) <= 1) {
+      setShown(value);
+      return;
+    }
+
+    // ~420ms regardless of the size of the jump: a counter whose duration
+    // scales with the delta takes seconds to settle the first time a busy
+    // queue loads.
+    const DURATION = 420;
+    const start = performance.now();
+    let frame = 0;
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / DURATION);
+      // Same ease-out cubic as every other transition in the app.
+      const eased = 1 - Math.pow(1 - t, 3);
+      setShown(Math.round(from + (value - from) * eased));
+      if (t < 1) frame = requestAnimationFrame(step);
+    };
+
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
   if (typeof value !== 'number') {
     return <span className={`text-[22px] font-medium tabular-nums ${colour}`}>{value}</span>;
   }
-  return (
-    <motion.span
-      key={value}
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: EASE }}
-      className={`text-[22px] font-medium tabular-nums ${colour}`}
-    >
-      {value}
-    </motion.span>
-  );
+
+  // tabular-nums matters here specifically: without it the tile's width jumps
+  // on every frame as the digits change, and the whole row reflows.
+  return <span className={`text-[22px] font-medium tabular-nums ${colour}`}>{shown}</span>;
 }
