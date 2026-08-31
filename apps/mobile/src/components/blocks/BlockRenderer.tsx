@@ -151,26 +151,34 @@ function BlockBody({ block }: { block: Block }) {
       return (
         <div className="ut-card flex gap-1 overflow-x-auto p-1">
           {block.items.map((filter) => (
+            // The 44px floor is on the BUTTON; the tinted pill inside keeps
+            // the design's small size. Growing the pill itself to 44px would
+            // make a row of filters look like a row of primary actions —
+            // the target has to be big, the chip does not.
             <button
               key={filter.id}
               onClick={() => {
                 haptic('tap');
                 filter.onClick();
               }}
-              className={`flex flex-none items-center gap-1.5 whitespace-nowrap rounded-[9px] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                filter.active ? 'bg-accent text-white' : 'text-ink-soft'
-              }`}
+              className="ut-touch flex flex-none items-center justify-center px-0.5"
             >
-              {filter.label}
-              {filter.count !== undefined ? (
-                <span
-                  className={`rounded px-1 py-px text-[10px] ${
-                    filter.active ? 'bg-white/20' : 'bg-ink/[0.06] text-ink-muted'
-                  }`}
-                >
-                  {filter.count}
-                </span>
-              ) : null}
+              <span
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-[9px] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                  filter.active ? 'bg-accent text-white' : 'text-ink-soft'
+                }`}
+              >
+                {filter.label}
+                {filter.count !== undefined ? (
+                  <span
+                    className={`rounded px-1 py-px text-[10px] ${
+                      filter.active ? 'bg-white/20' : 'bg-ink/[0.06] text-ink-muted'
+                    }`}
+                  >
+                    {filter.count}
+                  </span>
+                ) : null}
+              </span>
             </button>
           ))}
         </div>

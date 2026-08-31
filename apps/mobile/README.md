@@ -36,6 +36,69 @@ Each role owns exactly one path prefix (`/citizen`, `/crew`, `/bus`,
 `/emergency`), declared once in `src/roles/catalog.ts`. Adding a screen is a
 route line; there is no second list of permitted paths.
 
+## Screens are block lists
+
+A screen is an array of typed blocks rendered by `components/blocks/BlockRenderer.tsx`.
+`Block` is a discriminated union and the renderer's `switch` ends in a `never`
+check, so adding a kind without rendering it fails the build rather than
+silently dropping a section. Adding a screen to a role is a config change plus
+a route line.
+
+`custom` is the escape hatch and is meant to stay rare. The report wizard and
+the map screens are components, because they are one stateful thing each —
+modelling a form as config would be the architecture used for its own sake.
+
+## The privacy story
+
+The citizen map shows only `AUTHORITY_NOTIFIED` → `RESOLVED`. Below that the
+ladder is machine output (`DETECTED` is one bus, low confidence), and
+`REJECTED` is the set the city looked at and disagreed with. Publishing either
+puts unreviewed algorithmic claims about specific streets in front of the
+public.
+
+Three independent gates, on purpose — any one failing is a bug, all three
+failing is a breach:
+
+1. **Ingest.** `store/live.ts` refuses to admit a non-public event on a citizen
+   session — not from the initial fetch, not from the socket. An event that
+   falls back below the line is dropped, not left showing its last public copy.
+2. **Read.** `useEvents({ publicOnly })` filters again.
+3. **Render.** `toPublicEvent` *removes* `fused_confidence`, `observation_count`,
+   `distinct_bus_count`, `assigned_team`, `sla_due` and `evidence_uris`. The
+   keys are absent, not blank — a test asserts absence.
+
+Verified against a seeded database: the citizen query returns 24 of 41 events,
+withholding exactly `DETECTED`, `AI_VERIFIED` and `REJECTED`.
+
+## Live sync
+
+One WebSocket for the whole app, opened in `AppShell` — the only component
+every signed-in screen mounts inside. Every screen reads one shared cache, so
+two screens can never disagree about the same event.
+
+Offline is visible, and means two things: the socket is closed, **or** it is
+open and silent for 45s. The server sends `TICK`, so silence means the
+connection died without either end noticing. A bar, not a toast — the
+condition persists, and a toast would take the warning away while the problem
+is still there.
+
+Phone-specific: 0–30% backoff jitter (a depot of phones reconnecting in
+lockstep is a self-inflicted thundering herd) and an immediate retry on
+`online`/`visibilitychange`, because a suspended tab's socket dies silently.
+
+## What is not real, and says so on screen
+
+Written here *and* in the UI next to the thing itself:
+
+| | |
+|---|---|
+| Login | No account system. Any password. See above. |
+| Crew photo upload | No endpoint — only citizen reports have one. The button says so. |
+| Emergency accept / dispatch | Local to the phone. The control room is not told. Said next to the buttons. |
+| Camera tiles | No video and no camera-health feed. Status is inferred from bus telemetry; the obstruction tile is a marked example. |
+| Dispatch ETA | Straight line at 28 km/h, labelled as such. There is no routing engine on the phone. |
+| Reverse geocoding | Nearest of 26 seeded segments. Says "near <street>", never an exact address, and the field is editable. |
+
 ## Types are generated
 
 `src/lib/types.ts` and `src/lib/cityRef.ts` are **generated** from
@@ -69,5 +132,11 @@ gradient for the citizen hero banner — the only gradient in the app.
 - Only the canvas scrolls. The top bar and tab bar are fixed and carry the
   safe-area insets; nothing else needs them.
 - Two font weights, 400 and 500. Sentence case.
-- Every button does something. An unbuilt screen gets a styled empty state
-  (`screens/Placeholder.tsx`), never a blank one.
+- Every button does something, and no route is blank. 18 tests render every
+  route of every role **with the API unreachable** and assert the canvas has
+  content — the hostile case, and the one a bad venue actually produces.
+- `test/polish.test.ts` enforces the rules that decay first: two font weights,
+  one gradient, no springs, a 44px floor, and no copy claiming the login is
+  secure.
+- maplibre is lazy-loaded. Most sessions never open a map, and it is ~865 kB —
+  more than the rest of the app put together. Main bundle: 403 kB.

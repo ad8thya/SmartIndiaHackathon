@@ -19,6 +19,7 @@ import { MOBILE_ROLES } from '../roles/catalog';
 import { useSession } from '../store/session';
 import { BottomSheet } from './BottomSheet';
 import { OfflineBar } from './OfflineBar';
+import { PullToRefresh } from './PullToRefresh';
 import { useLive } from '../store/live';
 import { haptic } from '../lib/haptics';
 
@@ -33,6 +34,7 @@ export function AppShell() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const connect = useLive((s) => s.connect);
   const disconnect = useLive((s) => s.disconnect);
+  const hydrate = useLive((s) => s.hydrate);
 
   /**
    * ONE socket for the whole app, opened here because this is the only
@@ -107,28 +109,33 @@ export function AppShell() {
 
       <OfflineBar />
 
-      {/* One scroll container for the whole app. Keyed on the path so each
-          screen enters rather than swapping in place. */}
-      <main className="ut-canvas relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: EASE }}
-            /**
-             * h-full, not min-h-full. A full-bleed screen (any map) needs a
-             * parent with a *definite* height or its 100% resolves to nothing
-             * and the canvas collapses to 0px — which renders as a blank panel
-             * rather than an error. Taller screens still scroll: their content
-             * overflows this box and `main` accounts for it.
-             */
-            className="h-full"
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+      {/* One scroll container for the whole app — the pull-to-refresh wrapper
+          IS that container, so there is still exactly one scroller and no
+          nesting. Keyed on the path so each screen enters rather than swapping
+          in place. */}
+      <main className="relative min-h-0 flex-1">
+        <PullToRefresh onRefresh={() => hydrate(session.role)}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: EASE }}
+              /**
+               * h-full, not min-h-full. A full-bleed screen (any map) needs a
+               * parent with a *definite* height or its 100% resolves to
+               * nothing and the canvas collapses to 0px — which renders as a
+               * blank panel rather than an error. Taller screens still scroll:
+               * their content overflows this box and the scroller above
+               * accounts for it.
+               */
+              className="h-full"
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
+        </PullToRefresh>
       </main>
 
       <nav className="ut-safe-bottom ut-nosel z-20 flex flex-none items-stretch justify-around border-t border-line bg-canvas/90 px-2 pt-1.5 backdrop-blur-[16px]">

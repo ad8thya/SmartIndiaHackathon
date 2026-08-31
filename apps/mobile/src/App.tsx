@@ -21,6 +21,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { RequireRole } from './components/RequireRole';
+import { SwipeBack } from './components/SwipeBack';
 import { LoginScreen } from './screens/LoginScreen';
 import { NotAvailableScreen } from './screens/NotAvailableScreen';
 import { AlertsScreen } from './screens/citizen/AlertsScreen';
@@ -80,7 +81,14 @@ export function App() {
             own URL so "Report another" is a navigation rather than a reset,
             and swipe-back from it lands on the home screen instead of a
             half-filled form the citizen already submitted. */}
-        <Route path="report/sent/:reportId" element={<ReportSentScreen />} />
+        <Route
+          path="report/sent/:reportId"
+          element={
+            <SwipeBack>
+              <ReportSentScreen />
+            </SwipeBack>
+          }
+        />
         <Route path="reports" element={<MyReportsScreen />} />
         {/* Full-bleed: the map owns the canvas, so no padding wrapper. */}
         <Route path="conditions" element={<RoadConditionsScreen />} />
@@ -101,7 +109,14 @@ export function App() {
         {/* Detail is its own route rather than a sheet: a crew opens one order
             and works from it, so it needs a URL, a back button and somewhere
             to come back to after Navigate hands off to Maps. */}
-        <Route path="order/:eventId" element={<OrderScreen />} />
+        <Route
+          path="order/:eventId"
+          element={
+            <SwipeBack>
+              <OrderScreen />
+            </SwipeBack>
+          }
+        />
         <Route path="map" element={<CrewMapScreen />} />
         <Route path="verification" element={<VerificationScreen />} />
         <Route path="*" element={<CatchAll />} />
