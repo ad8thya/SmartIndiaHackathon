@@ -22,6 +22,7 @@ from sqlalchemy import select
 from ..deps import Bus, Settings, State
 from ..hub import LiveState
 from ..media import resolve_photo, store_photo
+from ..projection import is_public, project_event
 
 log = logging.getLogger("urban-twin.events")
 router = APIRouter(prefix="/api", tags=["events"])
@@ -192,6 +193,42 @@ def _filter_bbox(events: list[Event], bbox: str) -> list[Event]:
         for event in events
         if min_lon <= event.lon <= max_lon and min_lat <= event.lat <= max_lat
     ]
+
+
+@router.get(
+    "/events/public",
+    summary="The citizen dataset — public rungs only, operator fields removed",
+    response_model=None,
+)
+async def list_public_events(
+    state: State,
+    bbox: str | None = Query(default=None, description="minLon,minLat,maxLon,maxLat"),
+    since: datetime | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> list[dict[str, object]]:
+    """Events as a member of the public may receive them.
+
+    A SEPARATE ROUTE, not a flag on `/api/events`, because the response shape
+    genuinely differs — six fields are absent — and a parameter that silently
+    changes the shape of a response is how a client ends up reading a key that
+    is sometimes there.
+
+    `response_model=None` is deliberate: typing this as `list[Event]` would
+    make FastAPI re-serialise the full model and put the removed fields back.
+    The projection in `projection.py` is the contract for this route.
+
+    No `min_confidence` parameter either — filtering on a number the caller is
+    not allowed to see would be a way of asking for it one bisection at a time.
+    """
+    events = [event for event in await merged_events(state) if is_public(event)]
+
+    if since is not None:
+        events = [event for event in events if event.last_seen >= since]
+    if bbox:
+        events = _filter_bbox(events, bbox)
+
+    events.sort(key=lambda event: event.last_seen, reverse=True)
+    return [project_event(event) for event in events[:limit]]
 
 
 # Declared BEFORE /events/{event_id} — otherwise the uuid route matches

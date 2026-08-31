@@ -18,10 +18,12 @@ import { PUBLIC_STATUSES } from './display';
 import type { UTEvent } from './types';
 
 /**
- * What a citizen screen is allowed to hold. Structurally a subset of UTEvent,
- * so nothing can hand a full event to a component expecting this one and have
- * TypeScript stay quiet about the extra fields — the fields are gone, not
- * hidden behind a flag.
+ * Exactly what `GET /api/events/public` and `ws?audience=public` send.
+ *
+ * Mirrors `services/cloud/api/projection.py`: an Event minus
+ * fused_confidence, observation_count, distinct_bus_count, assigned_team,
+ * sla_due and evidence_uris. Keep the two in step — this is the shape the
+ * server actually produces, not a wish about it.
  */
 export interface PublicEvent {
   event_id: string;
@@ -31,11 +33,40 @@ export interface PublicEvent {
   severity: UTEvent['severity'];
   status: UTEvent['status'];
   road_segment_id: string | null;
+  first_seen: string;
   last_seen: string;
 }
 
-/** Strips everything an operator may see and a citizen may not. */
-export function toPublicEvent(event: UTEvent): PublicEvent {
+/**
+ * What the live store holds, whichever role is signed in.
+ *
+ * The public fields are always present; the operator fields are present only
+ * on an operational session, because on a citizen session the server never
+ * sent them. Typed as optional rather than asserted away, so every read of an
+ * operator field is a place TypeScript makes you decide what happens when it
+ * is genuinely absent. That is the correct amount of friction: those reads
+ * are exactly the ones that would have leaked.
+ */
+export type StoredEvent = PublicEvent &
+  Partial<
+    Pick<
+      UTEvent,
+      | 'fused_confidence'
+      | 'observation_count'
+      | 'distinct_bus_count'
+      | 'assigned_team'
+      | 'sla_due'
+      | 'evidence_uris'
+    >
+  >;
+
+/**
+ * Belt to the server's braces. The projection already removed these fields
+ * before they reached this device; this makes a citizen component's type
+ * reflect that, and keeps working if someone ever points a citizen session at
+ * the operator endpoint by mistake.
+ */
+export function toPublicEvent(event: StoredEvent): PublicEvent {
   return {
     event_id: event.event_id,
     lat: event.lat,
@@ -44,10 +75,11 @@ export function toPublicEvent(event: UTEvent): PublicEvent {
     severity: event.severity,
     status: event.status,
     road_segment_id: event.road_segment_id,
+    first_seen: event.first_seen,
     last_seen: event.last_seen,
     // Deliberately absent: fused_confidence, observation_count,
-    // distinct_bus_count, assigned_team, sla_due, evidence_uris. See
-    // apps/mobile/README.md § The privacy story.
+    // distinct_bus_count, assigned_team, sla_due, evidence_uris — removed by
+    // services/cloud/api/projection.py before they ever reached this device.
   };
 }
 

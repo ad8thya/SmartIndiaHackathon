@@ -14,7 +14,8 @@
 
 import { Clock, MapPin, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Severity, UTEvent, WorkflowStatus } from './types';
+import type { Severity, WorkflowStatus } from './types';
+import type { StoredEvent } from './useEvents';
 import { distanceLabel, distanceM } from './display';
 
 /** The crew this phone belongs to. No auth exists to derive it — see above. */
@@ -56,7 +57,7 @@ const CREW_CLASSES: readonly string[] = [
 ];
 
 /** True when this is road work, at a rung where somebody owns it. */
-export function isQueued(event: UTEvent): boolean {
+export function isQueued(event: StoredEvent): boolean {
   return QUEUE_STATUSES.includes(event.status) && CREW_CLASSES.includes(event.detection_class);
 }
 
@@ -120,11 +121,16 @@ export interface Sla {
  * nothing — but the two cases must not be conflated silently, so the caller is
  * told which it got via `derived`.
  */
-export function slaFor(event: UTEvent, now = Date.now()): Sla & { derived: boolean } {
-  const derived = event.sla_due === null;
+export function slaFor(event: StoredEvent, now = Date.now()): Sla & { derived: boolean } {
+  // `sla_due` is null when the server never set one, and UNDEFINED on a
+  // citizen session, where the field is not sent at all (see projection.py).
+  // Both mean the same thing here — derive the window from first_seen — and
+  // the caller is told via `derived` so the UI can say the date is inferred.
+  const explicit = event.sla_due ?? null;
+  const derived = explicit === null;
   const dueAt = derived
     ? new Date(event.first_seen).getTime() + slaHours(event.severity) * 3_600_000
-    : new Date(event.sla_due as string).getTime();
+    : new Date(explicit).getTime();
 
   const msLeft = dueAt - now;
   const overdue = msLeft < 0;
@@ -149,7 +155,7 @@ export function slaFor(event: UTEvent, now = Date.now()): Sla & { derived: boole
 
 /** Icon+text rows for a queue card. */
 export function orderDetails(
-  event: UTEvent,
+  event: StoredEvent,
   from: { lat: number; lon: number } | null,
 ): { icon: LucideIcon; text: string }[] {
   const rows: { icon: LucideIcon; text: string }[] = [];

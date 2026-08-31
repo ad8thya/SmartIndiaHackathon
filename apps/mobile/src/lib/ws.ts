@@ -21,6 +21,20 @@ export const WS_URL: string =
   (import.meta.env.VITE_WS_URL as string | undefined) ??
   `${API_BASE.replace(/^http/, 'ws')}/ws/live`;
 
+/**
+ * The citizen socket.
+ *
+ * `audience=public` is enforced server-side: the projection happens before
+ * `send_text`, so this device never receives an operator field or an event
+ * below AUTHORITY_NOTIFIED. Filtering the REST fetch but not this would look
+ * correct for one second and leak for the rest of the session — the fetch
+ * happens once, the socket runs for as long as the app is open.
+ */
+export function wsUrlFor(audience: 'operator' | 'public'): string {
+  const separator = WS_URL.includes('?') ? '&' : '?';
+  return `${WS_URL}${separator}audience=${audience}`;
+}
+
 export type ConnectionState = 'connecting' | 'open' | 'closed';
 
 interface Options {

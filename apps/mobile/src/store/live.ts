@@ -7,27 +7,28 @@
  * neither knew when the other's copy went stale. There is now one copy and one
  * moment it was last correct.
  *
- * **The ingest filter is a privacy boundary, not a display option.**
- * On a citizen session, an event below AUTHORITY_NOTIFIED never enters this
- * store at all — not fetched, not merged from the socket, not held in memory
- * behind a flag. The role is fixed for the life of a session (switching signs
- * you out), so there is no path where the filter is on for the fetch and off
- * for the socket, which is exactly the kind of asymmetry that leaks.
+ * **Privacy is enforced on the server, and this is the belt.**
+ * A citizen session talks to `/api/events/public` and to
+ * `/ws/live?audience=public`, both of which REMOVE the operator-only fields
+ * and drop non-public events before anything is sent. The device never
+ * receives them, so there is nothing here to hide.
  *
- * Screens still map through `toPublicEvent` before rendering. Two independent
- * gates for the same property is deliberate; either one failing is a bug, both
- * failing is a breach.
+ * The client-side gates below are kept anyway — `admits()` on ingest and
+ * `toPublicEvent` on render. They are now redundant by design rather than
+ * load-bearing: if someone ever points a citizen session at the operator
+ * endpoint by mistake, the store still refuses the data. Defence in depth is
+ * cheap; discovering the projection was the only gate would not be.
  */
 
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import { PUBLIC_STATUSES } from '../lib/display';
-import { LiveSocket, type ConnectionState } from '../lib/ws';
+import { LiveSocket, wsUrlFor, type ConnectionState } from '../lib/ws';
+import type { StoredEvent } from '../lib/useEvents';
 import type {
   CitizenReport,
   IncidentReport,
   IncidentResponse,
-  UTEvent,
   WSMessage,
 } from '../lib/types';
 import type { MobileRoleId } from '../roles/catalog';
@@ -44,7 +45,7 @@ interface LiveState {
   /** Set when the initial load failed — the screens' "you are offline" case. */
   loadError: string | null;
 
-  events: Record<string, UTEvent>;
+  events: Record<string, StoredEvent>;
   reports: CitizenReport[];
   incidents: IncidentReport[];
   /**
@@ -63,18 +64,18 @@ interface LiveState {
   disconnect: () => void;
   hydrate: (role: MobileRoleId) => Promise<void>;
 
-  eventList: () => UTEvent[];
+  eventList: () => StoredEvent[];
 }
 
 /** Module-level, not in the store: it is a resource, not rendered state. */
 let socket: LiveSocket | null = null;
 
-function isPublicStatus(status: UTEvent['status']): boolean {
+function isPublicStatus(status: StoredEvent['status']): boolean {
   return (PUBLIC_STATUSES as readonly string[]).includes(status);
 }
 
 /** The one place the role decides what may enter the cache. */
-function admits(role: MobileRoleId, event: UTEvent): boolean {
+function admits(role: MobileRoleId, event: StoredEvent): boolean {
   return role === 'citizen' ? isPublicStatus(event.status) : true;
 }
 
@@ -92,14 +93,22 @@ export const useLive = create<LiveState>((set, get) => ({
     // Each request is settled independently: a failing incidents endpoint must
     // not leave the map empty, which is what a single Promise.all would do.
     const [events, reports, incidents, responses] = await Promise.allSettled([
-      api.events(role === 'citizen' ? { status: [...PUBLIC_STATUSES], limit: 500 } : { limit: 500 }),
+      // Two different endpoints, not one endpoint with a filter: the citizen
+      // response is a genuinely different shape (six fields absent).
+      role === 'citizen' ? api.publicEvents({ limit: 500 }) : api.events({ limit: 500 }),
       api.reports({ limit: 200 }),
-      api.incidents({ limit: 50 }),
+      // NOT for citizens. An IncidentReport carries evidence_uris, a written
+      // narrative and a plate hash — a collision dossier, which is Emergency
+      // Team's and Traffic Police's business and nobody else's. No citizen
+      // screen reads `incidents`, so fetching them put a dossier on a
+      // member of the public's device for nothing. `/ws/live?audience=public`
+      // already omits them from HELLO; this closes the REST half.
+      role === 'citizen' ? Promise.resolve([]) : api.incidents({ limit: 50 }),
       // Only the role that acts on them asks for them.
       role === 'emergency-team' ? api.incidentResponses() : Promise.resolve([]),
     ]);
 
-    const nextEvents: Record<string, UTEvent> = {};
+    const nextEvents: Record<string, StoredEvent> = {};
     if (events.status === 'fulfilled') {
       for (const event of events.value) {
         if (admits(role, event)) nextEvents[event.event_id] = event;
@@ -133,6 +142,7 @@ export const useLive = create<LiveState>((set, get) => ({
     void get().hydrate(role);
 
     socket = new LiveSocket({
+      url: wsUrlFor(role === 'citizen' ? 'public' : 'operator'),
       onState: (connection) => set({ connection }),
       onMessage: (message: WSMessage) => {
         set({ lastFrameAt: Date.now() });
@@ -142,7 +152,7 @@ export const useLive = create<LiveState>((set, get) => ({
             // The server's opening snapshot. Merged rather than replacing, so
             // a reconnect does not blank the screen mid-scroll.
             const payload = message.payload as {
-              events?: UTEvent[];
+              events?: StoredEvent[];
               incidents?: IncidentReport[];
             };
             const merged = { ...get().events };
@@ -158,7 +168,7 @@ export const useLive = create<LiveState>((set, get) => ({
 
           case 'EVENT_NEW':
           case 'EVENT_UPDATED': {
-            const event = message.payload as unknown as UTEvent;
+            const event = message.payload as unknown as StoredEvent;
             if (!admits(role, event)) {
               // A citizen session watching an event fall back below the public
               // line — REJECTED, say — must drop the copy it already has, not

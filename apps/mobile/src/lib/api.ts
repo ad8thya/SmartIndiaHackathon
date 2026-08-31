@@ -6,6 +6,7 @@
  * disagree about is where that API is. Nothing outside this file calls `fetch`.
  */
 
+import type { PublicEvent } from './useEvents';
 import type {
   AnalyticsSummary,
   BusPosition,
@@ -105,6 +106,14 @@ export const api = {
 
   events: (filters: EventFilters = {}) => request<UTEvent[]>(`/api/events${query(filters)}`),
   event: (eventId: string) => request<UTEvent>(`/api/events/${eventId}`),
+
+  /**
+   * The citizen dataset. A SEPARATE endpoint, not a flag: the response is an
+   * event with six operator-only fields absent, so `PublicEvent` is its real
+   * type. The server removes them — this client could not put them back.
+   */
+  publicEvents: (params: { [key: string]: unknown; since?: string; limit?: number } = {}) =>
+    request<PublicEvent[]>(`/api/events/public${query(params)}`),
 
   setEventStatus: (
     eventId: string,

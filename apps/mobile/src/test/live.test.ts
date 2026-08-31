@@ -37,17 +37,24 @@ function event(status: WorkflowStatus, id = 'e1'): UTEvent {
  * given a stub that captures the callbacks, so a frame can be fed in directly.
  */
 function withSocket(role: 'citizen' | 'road-maintenance') {
-  const handlers: { onMessage?: (m: unknown) => void } = {};
+  const handlers: { onMessage?: (m: unknown) => void; url?: string } = {};
 
   class SocketStub {
-    constructor(options: { onMessage: (m: unknown) => void }) {
+    constructor(options: { onMessage: (m: unknown) => void; url?: string }) {
       handlers.onMessage = options.onMessage;
+      handlers.url = options.url;
     }
     connect() {}
     close() {}
   }
 
-  vi.doMock('../lib/ws', () => ({ LiveSocket: SocketStub }));
+  // The mock must carry every export the store imports — `wsUrlFor` decides
+  // which audience the socket asks for, and omitting it makes the store fail
+  // to import rather than fail a useful assertion.
+  vi.doMock('../lib/ws', () => ({
+    LiveSocket: SocketStub,
+    wsUrlFor: (audience: string) => `ws://test/ws/live?audience=${audience}`,
+  }));
   return { handlers, role };
 }
 
@@ -149,6 +156,36 @@ describe('the citizen ingest filter', () => {
     handlers.onMessage?.({ type: 'EVENT_NEW', ts, payload: event('DETECTED', 'raw-1') });
     expect(Object.keys(store.getState().events)).toContain('raw-1');
 
+    store.getState().disconnect();
+  });
+});
+
+describe('the socket asks for the right audience', () => {
+  /**
+   * The server projects per connection, so which audience the client asks for
+   * IS the privacy boundary for everything after the first fetch. A citizen
+   * session that opened an operator socket would look correct for one second
+   * and stream operator fields for the rest of the session.
+   */
+  it('opens a public socket for a citizen', async () => {
+    vi.resetModules();
+    const { handlers } = withSocket('citizen');
+    const { useLive: store } = await import('../store/live');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+
+    store.getState().connect('citizen');
+    expect(handlers.url).toContain('audience=public');
+    store.getState().disconnect();
+  });
+
+  it('opens an operator socket for a crew', async () => {
+    vi.resetModules();
+    const { handlers } = withSocket('road-maintenance');
+    const { useLive: store } = await import('../store/live');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+
+    store.getState().connect('road-maintenance');
+    expect(handlers.url).toContain('audience=operator');
     store.getState().disconnect();
   });
 });

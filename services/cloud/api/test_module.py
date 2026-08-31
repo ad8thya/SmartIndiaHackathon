@@ -777,3 +777,109 @@ def test_the_obstructed_state_is_reachable_on_the_real_fleet() -> None:
 
     assert obstructed, "no seeded bus ever shows an obstructed lens — the state is unreachable"
     assert len(obstructed) < len(fleet), "every bus is obstructed — the rate is wrong"
+
+
+# ── the public projection ───────────────────────────────────────────────────
+# Privacy that is true on the wire. These assert absence, which is the only
+# assertion that means anything here: a field that is merely blank is one
+# refactor away from being filled in again.
+
+OPERATOR_ONLY = {
+    "fused_confidence",
+    "observation_count",
+    "distinct_bus_count",
+    "assigned_team",
+    "sla_due",
+    "evidence_uris",
+}
+
+
+def test_public_events_omit_every_operator_field(client: TestClient) -> None:
+    make_event(WorkflowStatus.MAINTENANCE_ASSIGNED)
+    public = client.get("/api/events/public").json()
+    assert public, "expected at least one public event"
+
+    for event in public:
+        leaked = OPERATOR_ONLY & set(event)
+        assert not leaked, f"public event leaked {sorted(leaked)}"
+        # The fields a citizen map genuinely needs are still there.
+        assert {"event_id", "lat", "lon", "status", "severity", "detection_class"} <= set(event)
+
+
+def test_public_events_omit_the_machine_rungs(client: TestClient) -> None:
+    """DETECTED and AI_VERIFIED are unreviewed algorithmic claims about a
+    specific street; REJECTED is one the city looked at and disagreed with."""
+    for status in (WorkflowStatus.DETECTED, WorkflowStatus.AI_VERIFIED, WorkflowStatus.REJECTED):
+        make_event(status)
+    make_event(WorkflowStatus.RESOLVED)
+
+    statuses = {event["status"] for event in client.get("/api/events/public").json()}
+    assert not statuses & {"DETECTED", "AI_VERIFIED", "REJECTED"}
+    assert "RESOLVED" in statuses
+
+
+def test_operator_events_are_unchanged(client: TestClient) -> None:
+    """The projection must not have narrowed the operator's own view."""
+    make_event(WorkflowStatus.MAINTENANCE_ASSIGNED)
+    events = client.get("/api/events").json()
+    assert set(events[0]) >= OPERATOR_ONLY
+
+
+def test_public_route_is_not_parsed_as_a_uuid(client: TestClient) -> None:
+    """/api/events/public must not match /api/events/{event_id}."""
+    assert client.get("/api/events/public").status_code == 200
+
+
+def test_public_socket_strips_and_drops(client: TestClient) -> None:
+    """The socket runs for the whole session; the fetch happens once. A filter
+    on one and not the other looks correct for a second and leaks after."""
+    import json as _json
+
+    from services.cloud.api.hub import broadcaster
+    from services.cloud.api.routers.ws import _for_public
+
+    public_event = make_event(WorkflowStatus.MAINTENANCE_ASSIGNED)
+    hidden_event = make_event(WorkflowStatus.DETECTED)
+
+    queue = broadcaster.subscribe()
+    try:
+        broadcaster.publish(WSMessageType.EVENT_UPDATED, public_event.model_dump(mode="json"))
+        broadcaster.publish(WSMessageType.EVENT_UPDATED, hidden_event.model_dump(mode="json"))
+        raw = []
+        while not queue.empty():
+            raw.append(queue.get_nowait())
+    finally:
+        broadcaster.unsubscribe(queue)
+
+    projected = [_for_public(message) for message in raw]
+
+    kept = [_json.loads(m) for m in projected if m is not None]
+    assert len(kept) == 1, "the DETECTED event should have been dropped, not projected"
+    assert not OPERATOR_ONLY & set(kept[0]["payload"])
+    assert kept[0]["payload"]["status"] == "MAINTENANCE_ASSIGNED"
+
+
+def test_public_socket_drops_unknown_frame_types(client: TestClient) -> None:
+    """An allowlist, not a denylist.
+
+    The first version forwarded anything it did not recognise, which quietly
+    sent INCIDENT — a collision dossier with evidence URIs, a narrative and a
+    plate hash — to every citizen device with the app open.
+    """
+    import json as _json
+
+    from services.cloud.api.routers.ws import _for_public
+
+    incident = _json.dumps(
+        {
+            "type": "INCIDENT",
+            "ts": NOW.isoformat(),
+            "payload": {"narrative": "hit and run", "evidence_uris": ["s3://evidence/plate.jpg"]},
+        }
+    )
+    assert _for_public(incident) is None
+
+    invented = _json.dumps({"type": "SOMETHING_NEW", "ts": NOW.isoformat(), "payload": {}})
+    assert _for_public(invented) is None
+
+    assert _for_public("not json at all") is None
