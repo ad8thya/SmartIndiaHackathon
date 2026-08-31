@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 from math import cos, pi, sin
-from typing import Any
 
 from citydata import SEGMENTS, SegmentSpec, haversine_m
 from contracts import (

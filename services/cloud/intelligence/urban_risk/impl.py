@@ -7,7 +7,6 @@ pedestrians 15%, school proximity 15%, near-miss 12%, incidents 8%) following IR
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 
 from contracts import RiskBand, RiskContext, UrbanRiskScore
 
