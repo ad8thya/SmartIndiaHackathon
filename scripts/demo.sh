@@ -49,16 +49,41 @@ run() { # run <colour> <label> <cmd...>
 # ── 1. the built frontend ────────────────────────────────────────────────────
 # Built with VITE_BASE=/m/ to match where spa.py mounts it. Getting this wrong
 # is silent: the page loads and every asset 404s.
-if [ ! -f apps/mobile/dist/index.html ] || [ -n "${REBUILD:-}" ]; then
-  echo "  building the mobile app (once — this is not a dev server)…"
+# Three reasons to rebuild, and the third is the one that bites.
+#
+#   1. there is no build yet
+#   2. REBUILD=1 was asked for
+#   3. THE EXISTING BUILD HAS THE WRONG ASSET BASE. `npm run build` in
+#      apps/mobile — which anyone does while developing — produces a dist
+#      rooted at `/`. This script serves that dist at `/m`, so the HTML asks
+#      for `/assets/…` and gets 404 for every script and stylesheet. The page
+#      loads, renders white, and nothing in any log says why. mtime cannot
+#      catch it: a `/`-based dist can be newer than its sources and still be
+#      wrong. So check the artefact itself.
+needs_build=""
+[ -f apps/mobile/dist/index.html ] || needs_build="no build yet"
+[ -z "${REBUILD:-}" ] || needs_build="REBUILD was set"
+if [ -f apps/mobile/dist/index.html ] && ! grep -q 'src="/m/assets/' apps/mobile/dist/index.html; then
+  needs_build="the existing build has the wrong asset base (built without VITE_BASE=/m/)"
+fi
+if [ -z "$needs_build" ] && [ -n "$(find apps/mobile/src apps/mobile/index.html -newer apps/mobile/dist/index.html 2>/dev/null | head -1)" ]; then
+  needs_build="sources are newer than the build"
+fi
+
+if [ -n "$needs_build" ]; then
+  echo "  building the mobile app — $needs_build"
   VITE_BASE=/m/ npm --prefix apps/mobile run build --silent || {
     echo "  ✗ mobile build failed. Run 'make setup' first."; exit 1;
   }
 fi
 
-if [ -n "$(find apps/mobile/src apps/mobile/index.html -newer apps/mobile/dist/index.html 2>/dev/null | head -1)" ]; then
-  echo "  ⚠ apps/mobile/dist is older than your sources — rebuilding"
-  VITE_BASE=/m/ npm --prefix apps/mobile run build --silent
+# Belt and braces: never serve a dist whose asset base does not match the
+# mount. If the rebuild above somehow did not fix it, stop here rather than
+# on stage.
+if ! grep -q 'src="/m/assets/' apps/mobile/dist/index.html; then
+  echo "  ✗ apps/mobile/dist is built for the wrong base — its assets would 404 at /m"
+  echo "    rebuild with: VITE_BASE=/m/ npm --prefix apps/mobile run build"
+  exit 1
 fi
 
 # ── 2. offline asset check, before anyone is watching ────────────────────────
