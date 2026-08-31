@@ -15,11 +15,13 @@ from contracts import DetectionClass, Event, Severity, WorkflowStatus, WSMessage
 from db import Event as EventRow
 from db import session_scope, to_lonlat
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from ..deps import Bus, State
+from ..deps import Bus, Settings, State
 from ..hub import LiveState
+from ..media import resolve_photo, store_photo
 
 log = logging.getLogger("urban-twin.events")
 router = APIRouter(prefix="/api", tags=["events"])
@@ -45,6 +47,37 @@ class StatusPatch(BaseModel):
     }
 
 
+class EvidencePost(BaseModel):
+    """POST /api/events/{id}/evidence body — what a crew adds from the street.
+
+    Deliberately not part of StatusPatch. Adding a photo is not the same act as
+    moving the workflow: a crew photographs what they found *before* deciding
+    whether it is an inspection or a repair, and coupling the two would mean
+    either uploading nothing until they commit to a status, or advancing the
+    status just to attach a picture.
+    """
+
+    #: ``data:image/jpeg;base64,...``. Decoded to a file; only the path is kept.
+    photo: str | None = Field(default=None, description="base64 data URI, jpeg/png/webp")
+    note: str | None = Field(default=None, max_length=2000)
+    #: Which crew is claiming this. No auth exists to derive it — see
+    #: apps/mobile/src/lib/crew.ts's MY_TEAM.
+    team: str | None = Field(default=None, max_length=64)
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "photo": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+                    "note": "Water pooling at the kerb; patched and compacted.",
+                    "team": "GCC-Zone-13-Adyar",
+                }
+            ]
+        },
+    }
+
+
 def _row_to_event(row: EventRow) -> Event:
     lon, lat = to_lonlat(row.geom)
     return Event(
@@ -67,16 +100,37 @@ def _row_to_event(row: EventRow) -> Event:
 
 
 async def _load_events() -> tuple[list[Event], str]:
-    """Return (events, source). Source is 'postgres' or 'memory'."""
+    """Return (events, source). Source is 'postgres' or 'memory'.
+
+    Rows are validated one at a time and a bad one is skipped, not fatal.
+    Building the list in a comprehension meant a single row that failed an
+    Event validator — a `last_seen` earlier than its `first_seen`, which the
+    seeder can produce — raised out of the whole read and dropped the operator
+    to the in-memory cache. On a fresh process that cache is empty, so one
+    malformed row emptied the entire backlog while the database was healthy.
+    A skipped row is a warning and a gap; a swallowed exception is a blank
+    console.
+    """
     try:
         async with session_scope() as session:
             rows = (await session.execute(select(EventRow))).scalars().all()
-        return [_row_to_event(row) for row in rows], "postgres"
     except Exception as exc:
         log.warning("event read fell back to memory: %s", exc)
         from ..hub import state as live
 
         return live.event_list(), "memory"
+
+    events: list[Event] = []
+    skipped = 0
+    for row in rows:
+        try:
+            events.append(_row_to_event(row))
+        except Exception as exc:
+            skipped += 1
+            log.warning("skipping unreadable event %s: %s", row.event_id, exc)
+    if skipped:
+        log.warning("%d event row(s) failed validation and were skipped", skipped)
+    return events, "postgres"
 
 
 async def merged_events(state: LiveState) -> list[Event]:
@@ -140,6 +194,15 @@ def _filter_bbox(events: list[Event], bbox: str) -> list[Event]:
     ]
 
 
+# Declared BEFORE /events/{event_id} — otherwise the uuid route matches
+# "photos" first and every image request 422s on the path parameter. Starlette
+# resolves in registration order, so this ordering is load-bearing.
+@router.get("/events/photos/{filename}", include_in_schema=False)
+async def get_event_photo(filename: str, settings: Settings) -> FileResponse:
+    """Serve a crew-uploaded photo. Traversal is refused in `media.py`."""
+    return FileResponse(resolve_photo(settings.MEDIA_DIR, "events", filename))
+
+
 @router.get("/events/{event_id}", response_model=Event, summary="One event")
 # TODO (M5): behaviour is correct, but this hand-rolls the memory-then-postgres
 # lookup instead of calling merged_events(). Cosmetic — fold it in when you next
@@ -189,6 +252,75 @@ async def patch_status(event_id: UUID, patch: StatusPatch, state: State, broadca
     except Exception as exc:
         # the in-memory update already succeeded; the UI stays correct
         log.warning("could not persist status change for %s: %s", event_id, exc)
+
+    broadcaster.publish(WSMessageType.EVENT_UPDATED, updated.model_dump(mode="json"))
+    return updated
+
+
+@router.post(
+    "/events/{event_id}/evidence",
+    response_model=Event,
+    summary="Attach a photo or a note from the field",
+)
+async def add_evidence(
+    event_id: UUID,
+    body: EvidencePost,
+    state: State,
+    broadcaster: Bus,
+    settings: Settings,
+) -> Event:
+    """A crew's own photo of what they found, appended to the event.
+
+    The photo joins `evidence_uris` alongside the camera frames rather than
+    living in a separate crew-only field: the point of the list is "everything
+    anyone has seen of this defect", and splitting it by who took the picture
+    would mean every consumer has to remember to read both.
+
+    A request with neither a photo nor a note is a 422 rather than a no-op —
+    it means the client thinks it sent something, and answering 200 would hide
+    that.
+    """
+    if body.photo is None and not (body.note or "").strip():
+        raise HTTPException(status_code=422, detail="send a photo, a note, or both")
+
+    event = await get_event(event_id, state)
+
+    uris = list(event.evidence_uris)
+    if body.photo is not None:
+        # Suffixed by position so a second photo on the same event does not
+        # overwrite the first — the event id alone is not unique per upload.
+        uris.append(
+            store_photo(
+                body.photo,
+                event_id,
+                settings.MEDIA_DIR,
+                kind="events",
+                suffix_hint=f"crew{len(uris)}",
+            )
+        )
+
+    updated = event.model_copy(update={"evidence_uris": uris})
+    state.replace_event(updated)
+
+    try:
+        async with session_scope() as session:
+            row = await session.get(EventRow, event_id)
+            if row is not None:
+                row.evidence_uris = uris
+                if body.note and body.note.strip():
+                    await _append_work_order_note(
+                        session,
+                        row,
+                        StatusPatch(
+                            status=event.status,
+                            assigned_team=body.team,
+                            notes=body.note.strip(),
+                        ),
+                    )
+    except Exception as exc:
+        # The in-memory update already succeeded and the file is on disk; the
+        # console will show the photo. Only durability is lost.
+        log.warning("could not persist evidence for %s: %s", event_id, exc)
 
     broadcaster.publish(WSMessageType.EVENT_UPDATED, updated.model_dump(mode="json"))
     return updated

@@ -1,7 +1,7 @@
 /**
  * GENERATED from packages/contracts — do not edit by hand.
  * Regenerate with:  .venv/bin/python scripts/gen_frontend_types.py
- * contracts version: 1.2.0
+ * contracts version: 1.3.0
  */
 
 export type DetectionClass =
@@ -73,6 +73,17 @@ export type ReportStatus =
   | 'RESOLVED'
   | 'REJECTED';
 
+export type ResponseState =
+  | 'ACCEPTED'
+  | 'DISPATCHED'
+  | 'ON_SCENE'
+  | 'CLOSED';
+
+export type CameraState =
+  | 'OK'
+  | 'OBSTRUCTED'
+  | 'OFFLINE';
+
 export type WSMessageType =
   | 'HELLO'
   | 'BUS_POSITION'
@@ -81,6 +92,7 @@ export type WSMessageType =
   | 'ROAD_CONDITION'
   | 'INCIDENT'
   | 'REPORT_NEW'
+  | 'INCIDENT_RESPONSE'
   | 'TICK';
 
 export const INFRASTRUCTURE_CLASSES: readonly DetectionClass[] = [
@@ -316,6 +328,14 @@ export interface IncidentReport {
   evidence_uris: string[];
 }
 
+export interface IncidentResponse {
+  incident_id: string;
+  state: ResponseState;
+  team: string;
+  note: string | null;
+  at: string;
+}
+
 export interface CitizenReport {
   report_id: string;
   category: ReportCategory;
@@ -329,6 +349,14 @@ export interface CitizenReport {
   status: ReportStatus;
   created_at: string;
   linked_event_id: string | null;
+}
+
+export interface CameraStatus {
+  bus_id: string;
+  lens: string;
+  state: CameraState;
+  last_frame_age_s: number | null;
+  derived: boolean;
 }
 
 export interface WorkOrder {

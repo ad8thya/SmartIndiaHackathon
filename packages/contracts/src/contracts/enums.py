@@ -10,7 +10,9 @@ from enum import StrEnum
 
 __all__ = [
     "INFRASTRUCTURE_CLASSES",
+    "RESPONSE_ORDER",
     "TERMINAL_REPORT_STATUSES",
+    "TERMINAL_RESPONSE_STATES",
     "SAFETY_CLASSES",
     "FUSABLE_CLASSES",
     "SEVERITY_ORDER",
@@ -18,8 +20,10 @@ __all__ = [
     "TERMINAL_STATUSES",
     "DetectionClass",
     "RecommendationType",
+    "CameraState",
     "ReportCategory",
     "ReportStatus",
+    "ResponseState",
     "RiskBand",
     "RiskLevel",
     "Severity",
@@ -156,6 +160,41 @@ class ReportStatus(StrEnum):
     REJECTED = "REJECTED"
 
 
+class ResponseState(StrEnum):
+    """How far an emergency crew has got with an incident. (v1.3.0)
+
+    Deliberately NOT ``WorkflowStatus``. That ladder describes a defect being
+    repaired over days; this one describes a crew responding over minutes, and
+    the two share no rungs. Conflating them would put "AI_VERIFIED" in an
+    ambulance's state machine.
+
+    Ordered, and only forward — except ``CLOSED``, which any state may reach,
+    because a crew can stand down from an incident they never reached.
+    """
+
+    #: a crew has taken responsibility for it
+    ACCEPTED = "ACCEPTED"
+    #: a unit is on the way
+    DISPATCHED = "DISPATCHED"
+    #: the unit is at the scene
+    ON_SCENE = "ON_SCENE"
+    #: dealt with, or stood down from
+    CLOSED = "CLOSED"
+
+
+class CameraState(StrEnum):
+    """What a bus-mounted camera is doing. (v1.3.0)
+
+    ``OBSTRUCTED`` is the state that matters operationally: a powered camera
+    reporting frames whose lens is covered contributes nothing while looking
+    healthy on every count of "cameras online".
+    """
+
+    OK = "OK"
+    OBSTRUCTED = "OBSTRUCTED"
+    OFFLINE = "OFFLINE"
+
+
 class RiskLevel(StrEnum):
     """Composite risk band for a road segment (M3 fusion output)."""
 
@@ -209,6 +248,8 @@ class WSMessageType(StrEnum):
     INCIDENT = "INCIDENT"
     #: a member of the public filed a report from the phone app (v1.2.0)
     REPORT_NEW = "REPORT_NEW"
+    #: an emergency crew accepted, dispatched to, or closed an incident (v1.3.0)
+    INCIDENT_RESPONSE = "INCIDENT_RESPONSE"
     TICK = "TICK"
 
 
@@ -286,3 +327,15 @@ STATUS_ORDER: dict[WorkflowStatus, int] = {
 TERMINAL_REPORT_STATUSES: frozenset[ReportStatus] = frozenset(
     {ReportStatus.RESOLVED, ReportStatus.REJECTED}
 )
+
+
+#: Response states that are over. A phone must not show a live timer on one.
+TERMINAL_RESPONSE_STATES: frozenset[ResponseState] = frozenset({ResponseState.CLOSED})
+
+#: The order a response advances through. CLOSED is reachable from anywhere.
+RESPONSE_ORDER: dict[ResponseState, int] = {
+    ResponseState.ACCEPTED: 0,
+    ResponseState.DISPATCHED: 1,
+    ResponseState.ON_SCENE: 2,
+    ResponseState.CLOSED: 3,
+}

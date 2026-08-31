@@ -295,6 +295,44 @@ class CitizenReport(Base):
     )
 
 
+class IncidentResponse(Base):
+    """What an emergency crew did about an incident, one row per state change.
+
+    An append-only log rather than a mutable status column on `incidents`.
+    Two reasons, and the second is the important one:
+
+      · the incidents table is not written at runtime yet (see the TODO in
+        routers/incidents.py), so there is no row to hang a column off;
+      · "when was the unit dispatched" is the question this data exists to
+        answer, and a single overwritten column cannot answer it. Timings are
+        the whole point of an emergency log — a column that only remembers the
+        latest state loses the response interval, which is the one number
+        anyone reviewing an incident actually wants.
+
+    No foreign key to `incidents` for the same reason: incidents live in an
+    in-memory deque today, so a constraint would reject every insert. The id
+    is still an incident's uuid, and the constraint becomes correct to add the
+    day M4 persists them.
+    """
+
+    __tablename__ = "incident_responses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    incident_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: self-asserted — there is no auth to derive a crew identity from
+    team: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        # "the latest state of this incident" is the hot query, and it reads
+        # the newest row per incident.
+        Index("ix_incident_responses_incident_at", "incident_id", at.desc()),
+        Index("ix_incident_responses_at", "at"),
+    )
+
+
 class SchoolZone(Base):
     """Static geofences M3 uses to raise the pedestrian risk weighting."""
 
@@ -317,6 +355,7 @@ __all__ = [
     "Event",
     "EventObservation",
     "Incident",
+    "IncidentResponse",
     "Observation",
     "Route",
     "SchoolZone",

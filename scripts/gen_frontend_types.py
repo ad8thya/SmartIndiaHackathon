@@ -46,6 +46,8 @@ ENUMS = [
     contract_enums.RecommendationType,
     contract_enums.ReportCategory,
     contract_enums.ReportStatus,
+    contract_enums.ResponseState,
+    contract_enums.CameraState,
     contract_enums.WSMessageType,
 ]
 
@@ -62,7 +64,9 @@ MODELS = [
     contracts.WhatIfRequest,
     contracts.WhatIfResult,
     contracts.IncidentReport,
+    contracts.IncidentResponse,
     contracts.CitizenReport,
+    contracts.CameraStatus,
     contracts.WorkOrder,
     contracts.AnalyticsSummary,
     contracts.HealthStatus,

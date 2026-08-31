@@ -14,7 +14,7 @@
  * is an invitation to set the wrong one.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -28,6 +28,8 @@ import {
   MapPin,
   Navigation,
   Ruler,
+  Trash2,
+  Upload,
   Wrench,
 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
@@ -44,6 +46,8 @@ import {
 } from '../../lib/display';
 import { MY_TEAM, recommendedTreatment, slaFor } from '../../lib/crew';
 import { useGeolocation } from '../../lib/useGeolocation';
+import { toDownscaledDataUri } from '../../lib/photo';
+import { API_BASE } from '../../lib/api';
 import { haptic } from '../../lib/haptics';
 import type { UTEvent, WorkflowStatus } from '../../lib/types';
 
@@ -64,7 +68,9 @@ export function OrderScreen() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const cameraInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void api
@@ -96,6 +102,32 @@ export function OrderScreen() {
         : [],
     [event],
   );
+
+  async function uploadPhoto() {
+    if (!event || !photo || uploading) return;
+    setUploading(true);
+    setActionError(null);
+    try {
+      const updated = await api.addEvidence(event.event_id, {
+        photo,
+        note: note.trim() || undefined,
+        team: MY_TEAM,
+      });
+      setEvent(updated);
+      setPhoto(null);
+      setNote('');
+      haptic('confirm');
+    } catch (cause) {
+      haptic('warn');
+      setActionError(
+        cause instanceof ApiError
+          ? `The city service refused the photo (${cause.status}). It was not attached.`
+          : 'Could not reach the city service. The photo was NOT attached — try again when you have signal.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function advance(to: WorkflowStatus) {
     if (!event || busy) return;
@@ -197,8 +229,11 @@ export function OrderScreen() {
             {event.evidence_uris.map((uri) => (
               <img
                 key={uri}
-                src={uri}
-                alt="Camera evidence"
+                // A crew upload is a path this API serves; a camera frame is
+                // an object-store key that may not resolve at all. Prefixing
+                // only the former keeps both honest.
+                src={uri.startsWith('/api/') ? `${API_BASE}${uri}` : uri}
+                alt="Evidence"
                 className="h-32 w-44 flex-none rounded-[10px] border border-line object-cover"
                 // An object-store key that does not resolve to an image would
                 // otherwise render as a broken-image glyph, which reads as a
@@ -334,31 +369,65 @@ export function OrderScreen() {
           </div>
         )}
 
-        {/* Photo/note attachment is honest about where it stops: there is no
-            endpoint that accepts crew evidence yet (T5 built the citizen one),
-            so this records the note locally and says so rather than
-            pretending it uploaded. */}
-        <button
-          onClick={() => {
+        {/* Real upload. The photo joins the event's evidence list alongside
+            the camera frames, so the console sees it in the same place it
+            sees everything else about this defect. */}
+        <input
+          ref={cameraInput}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            setPhoto(await toDownscaledDataUri(file));
             haptic('tap');
-            setPhotoNote(
-              'Crew photos are not uploaded yet — only citizen reports have an upload endpoint. Your note above is sent with the status change.',
-            );
           }}
-          className="ut-touch mt-2.5 flex w-full items-center justify-center gap-2 rounded-[14px] border border-line bg-card px-4 py-3 text-[14px] font-medium"
-        >
-          <Camera size={16} className="text-ink-soft" /> Add a photo
-        </button>
+        />
 
-        {photoNote ? (
-          <motion.p
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-2 rounded-[10px] bg-ink/[0.04] px-3 py-2.5 text-[12px] leading-relaxed text-ink-soft"
+        {photo ? (
+          <div className="mt-2.5">
+            <div className="relative overflow-hidden rounded-[12px] border-2 border-emerald bg-ink">
+              <img src={photo} alt="Photo you took" className="h-36 w-full object-cover" />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={uploadPhoto}
+                disabled={uploading}
+                className="ut-touch flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-emerald px-4 py-3 text-[14px] font-medium text-white disabled:opacity-60"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" /> Uploading…
+                  </>
+                ) : (
+                  <>
+                    <Upload size={15} /> Attach to this order
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  haptic('tap');
+                  setPhoto(null);
+                }}
+                aria-label="Discard photo"
+                className="ut-touch flex items-center justify-center rounded-[12px] bg-danger/10 px-4 text-danger"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => cameraInput.current?.click()}
+            className="ut-touch mt-2.5 flex w-full items-center justify-center gap-2 rounded-[14px] border border-line bg-card px-4 py-3 text-[14px] font-medium"
           >
-            {photoNote}
-          </motion.p>
-        ) : null}
+            <Camera size={16} className="text-ink-soft" /> Add a photo
+          </button>
+        )}
 
         {actionError ? (
           <motion.div

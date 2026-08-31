@@ -22,10 +22,12 @@ from pydantic import (
 
 from .enums import (
     INFRASTRUCTURE_CLASSES,
+    CameraState,
     DetectionClass,
     RecommendationType,
     ReportCategory,
     ReportStatus,
+    ResponseState,
     RiskBand,
     RiskLevel,
     Severity,
@@ -40,11 +42,13 @@ __all__ = [
     "AnalyticsSummary",
     "BBox",
     "BusPosition",
+    "CameraStatus",
     "CitizenReport",
     "Event",
     "FrameMeta",
     "HealthStatus",
     "IncidentReport",
+    "IncidentResponse",
     "InfrastructureRecommendation",
     "LonLat",
     "NearMissEvent",
@@ -779,6 +783,94 @@ class CitizenReport(_Frozen):
                     "status": "SUBMITTED",
                     "created_at": "2026-08-21T09:14:03+05:30",
                     "linked_event_id": None,
+                }
+            ]
+        },
+    )
+
+
+class IncidentResponse(_Frozen):
+    """An emergency crew's answer to an incident. (v1.3.0)
+
+    Separate from ``IncidentReport`` because they have different authors and
+    different lifetimes: the report is what the fleet's cameras saw and never
+    changes, the response is what a crew did about it and changes several
+    times in the first ten minutes. Folding the response into the report would
+    mean rewriting an observation record every time a unit moved, which
+    destroys the one thing an incident dossier is for — being the unedited
+    account of what was detected.
+
+    There is deliberately no ``responder_id``. This prototype has no auth
+    (see apps/mobile/src/store/session.ts), so a crew identifier would be
+    self-asserted; ``team`` is the same self-asserted string the maintenance
+    side already uses, and calling it a team rather than an identity is the
+    honest framing.
+    """
+
+    incident_id: UUID
+    state: ResponseState
+    #: self-asserted, exactly like WorkOrder.assigned_team
+    team: str = Field(default="", max_length=64)
+    #: free text from the crew — what they found, what they did
+    note: str | None = Field(default=None, max_length=2000)
+    #: when this state was reached, not when the incident happened
+    at: datetime
+
+    _aware = field_validator("at")(_require_aware)
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "incident_id": "9c5b94b1-35ad-49bb-b118-8e8fc24abf80",
+                    "state": "DISPATCHED",
+                    "team": "GCC-Emergency-Adyar",
+                    "note": "Two units en route.",
+                    "at": "2026-08-21T18:44:02+05:30",
+                }
+            ]
+        },
+    )
+
+
+class CameraStatus(_Frozen):
+    """One camera on one bus. (v1.3.0)
+
+    ⚠️  ``state`` is DERIVED, not sensed. Urban Twin has no camera-health
+    telemetry: there is no channel on which a bus reports a covered lens. What
+    the fleet feed does carry is position updates, and a bus that has stopped
+    reporting has cameras that are not contributing — so OFFLINE is real, and
+    ``last_frame_at`` is a real proxy.
+
+    ``OBSTRUCTED`` is simulated, deterministically per camera, so the state
+    exists in the UI and a crew can recognise it before the day it happens.
+    ``derived`` is on the wire rather than in a comment for exactly that
+    reason: any consumer can tell that this field is a stand-in, and when a
+    real health channel arrives it flips to ``false`` and nothing else changes.
+    """
+
+    bus_id: str = Field(pattern=BUS_ID_PATTERN)
+    #: front / rear / left / right
+    lens: str = Field(max_length=16)
+    state: CameraState
+    #: age of the newest frame this camera is credited with, seconds
+    last_frame_age_s: float | None = Field(default=None, ge=0.0)
+    #: True while `state` is inferred rather than reported by the bus.
+    derived: bool = True
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "bus_id": "MTC-ADYAR-1042",
+                    "lens": "left",
+                    "state": "OBSTRUCTED",
+                    "last_frame_age_s": 3.2,
+                    "derived": True,
                 }
             ]
         },

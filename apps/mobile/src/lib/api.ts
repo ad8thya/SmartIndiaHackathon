@@ -9,12 +9,15 @@
 import type {
   AnalyticsSummary,
   BusPosition,
+  CameraStatus,
   CitizenReport,
   GeoJsonFeatureCollection,
   HealthStatus,
   IncidentReport,
+  IncidentResponse,
   ReportCategory,
   ReportStatus,
+  ResponseState,
   RoadCondition,
   UTEvent,
   UTRoute,
@@ -156,4 +159,37 @@ export const api = {
   ) => request<CitizenReport[]>(`/api/reports${query(params)}`),
 
   report: (reportId: string) => request<CitizenReport>(`/api/reports/${reportId}`),
+
+  // ── crew evidence ─────────────────────────────────────────────────────────
+  /** A crew's own photo/note, appended to the event's evidence list. */
+  addEvidence: (eventId: string, body: { photo?: string; note?: string; team?: string }) =>
+    request<UTEvent>(`/api/events/${eventId}/evidence`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  // ── emergency response ────────────────────────────────────────────────────
+  /** Latest state per incident. */
+  incidentResponses: () => request<IncidentResponse[]>('/api/incidents/responses'),
+
+  /** Every state change for one incident, oldest first. */
+  incidentResponseHistory: (incidentId: string) =>
+    request<IncidentResponse[]>(`/api/incidents/${incidentId}/response`),
+
+  /**
+   * Advance a response. Forward-only except CLOSED — a 409 here means another
+   * crew got there first, which the caller must show rather than swallow.
+   */
+  setIncidentResponse: (
+    incidentId: string,
+    body: { state: ResponseState; team?: string; note?: string },
+  ) =>
+    request<IncidentResponse>(`/api/incidents/${incidentId}/response`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  // ── camera health ─────────────────────────────────────────────────────────
+  /** Four rows per bus. `derived` says whether the state was sensed or inferred. */
+  busCameras: (busId: string) => request<CameraStatus[]>(`/api/fleet/${busId}/cameras`),
 };

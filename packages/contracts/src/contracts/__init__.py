@@ -12,6 +12,14 @@ RULES
   3. Additive changes (new optional field, new enum member) are cheap.
      Renames and removals are not — they break five people simultaneously.
 
+AMENDMENT (v1.3.0) — ⚠️ NEEDS TEAM ACK. Closes the three "no endpoint yet"
+gaps the phone app was carrying: ResponseState, CameraState,
+TERMINAL_RESPONSE_STATES, RESPONSE_ORDER, WSMessageType.INCIDENT_RESPONSE,
+and the IncidentResponse and CameraStatus models. Purely additive on the same
+terms as v1.2.0. Owners touched: M4 (incidents own the response lifecycle),
+M5 (tables, migration, endpoints), M6 (generated types). See BUILD.md §13.
+Contracts are RE-FROZEN as of this version.
+
 AMENDMENT (v1.2.0) — ⚠️ NEEDS TEAM ACK BEFORE THIS LANDS. A second approved
 unfreeze for the mobile app's citizen reports: ReportCategory, ReportStatus,
 TERMINAL_REPORT_STATUSES, WSMessageType.REPORT_NEW, and the CitizenReport
@@ -35,15 +43,19 @@ from __future__ import annotations
 from .enums import (
     FUSABLE_CLASSES,
     INFRASTRUCTURE_CLASSES,
+    RESPONSE_ORDER,
     SAFETY_CLASSES,
     SEVERITY_ORDER,
     STATUS_ORDER,
     TERMINAL_REPORT_STATUSES,
+    TERMINAL_RESPONSE_STATES,
     TERMINAL_STATUSES,
+    CameraState,
     DetectionClass,
     RecommendationType,
     ReportCategory,
     ReportStatus,
+    ResponseState,
     RiskBand,
     RiskLevel,
     Severity,
@@ -77,11 +89,13 @@ from .models import (
     AnalyticsSummary,
     BBox,
     BusPosition,
+    CameraStatus,
     CitizenReport,
     Event,
     FrameMeta,
     HealthStatus,
     IncidentReport,
+    IncidentResponse,
     InfrastructureRecommendation,
     LonLat,
     NearMissEvent,
@@ -106,7 +120,7 @@ from .topics import (
 #: 1.1.0 — the one-time AI intelligence layer amendment (near-miss, urban risk
 #: index, recommendations). Additive only: nothing existing renamed or removed.
 #: Re-frozen as of this version. See BUILD.md for the amendment record.
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     # enums
@@ -116,8 +130,10 @@ __all__ = [
     "RiskLevel",
     "RiskBand",
     "RecommendationType",
+    "CameraState",
     "ReportCategory",
     "ReportStatus",
+    "ResponseState",
     "WSMessageType",
     "INFRASTRUCTURE_CLASSES",
     "SAFETY_CLASSES",
@@ -126,6 +142,8 @@ __all__ = [
     "SEVERITY_ORDER",
     "STATUS_ORDER",
     "TERMINAL_REPORT_STATUSES",
+    "TERMINAL_RESPONSE_STATES",
+    "RESPONSE_ORDER",
     # models
     "BBox",
     "FrameMeta",
@@ -152,6 +170,9 @@ __all__ = [
     "RiskContext",
     # citizen reports (v1.2.0)
     "CitizenReport",
+    # field response + camera health (v1.3.0)
+    "IncidentResponse",
+    "CameraStatus",
     # maths
     "fuse_confidence",
     "derive_status",

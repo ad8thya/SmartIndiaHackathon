@@ -52,9 +52,9 @@ mock for real code is a one-line change inside one folder that no other file obs
 | **fusion** | M3 | **Working, and largely real.** Genuine noisy-OR confidence, genuine status ladder, stable event ids, confidence-weighted centroids, worst-severity-wins, SLA clocks, `FUSABLE_CLASSES` filtering. Only the *clustering* is faked: snap-to-25 m-grid instead of DBSCAN | **BUILT** — real `sklearn` DBSCAN (`metric="haversine"`, eps from the same settings the mock uses). Reuses the mock's confidence/status/severity code paths directly rather than copying them, and keeps event ids grid-keyed so pins survive across passes. `USE_REAL_FUSION` still `false` by default — see §11 | `services/cloud/consensus/impl.py` |
 | **risk** | M3 | **Working, and the intended v1.** A real, transparent 6-component weighted index (PCI 30% / congestion 20% / pedestrian density 15% / school proximity 15% / near-miss frequency 12% / recent incidents 8%). `components` always sum to `score`; `explanation` never empty | **Stub** — `score()` raises. Learned (gradient-boosted) upgrade path documented, same explainability requirement | `services/cloud/intelligence/urban_risk/impl.py` |
 | **recommend** | M2 | **Working.** Five deterministic proximity rules off the same `RiskContext` risk reads (ZEBRA_CROSSING, SIGNAL_TIMING, DIVIDER, DRAINAGE, SPEED_CALMING) | **Stub** — `recommend()` raises. Real evidence-id lookup from postgres documented | `services/cloud/intelligence/recommend/impl.py` |
-| **api** | M5 | n/a — real | **Real.** 23 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/cloud/api/**` |
-| **db** | M5 | n/a — real | **Real.** 10 tables, PostGIS Geography, 2 migrations, autogenerate verified empty | `packages/db/**` |
-| **contracts** | shared | n/a | **Real, and FROZEN (v1.2.0).** 8 Protocols, 18 models, pure fusion maths. Two approved amendments applied — see §10 and §12 | `packages/contracts/**` (team decision) |
+| **api** | M5 | n/a — real | **Real.** 29 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/cloud/api/**` |
+| **db** | M5 | n/a — real | **Real.** 11 tables, PostGIS Geography, 3 migrations, autogenerate verified empty | `packages/db/**` |
+| **contracts** | shared | n/a | **Real, and FROZEN (v1.3.0).** 8 Protocols, 20 models, pure fusion maths. Three approved amendments applied — see §10, §12 and §13 | `packages/contracts/**` (team decision) |
 | **frontend — console** | M6 | n/a — real | **Real.** `apps/web`: role picker, all 8 role views, and a phone-shaped view of the console at `/field`. Real offline basemap (committed PMTiles), real 3D buildings, contract types generated from `packages/contracts` | `apps/web/src/**` |
 | **frontend — phone** | M6 | n/a — real | **Real.** `apps/mobile`: the four field roles (Citizen, Road Maintenance, Bus Driver, Emergency Team), installable PWA, real MapLibre + PMTiles map rendering with zero network, one live WebSocket, and a visible permission boundary. Borrows apps/web's basemap by symlink — 0 added bytes. Shares the generated contract types; `make smoke` fails if the two copies ever differ | `apps/mobile/**` |
 
@@ -654,3 +654,90 @@ its own report resolved; one that could set `linked_event_id` could attach
 itself to any event in the system. There is no auth on this endpoint — see
 `apps/mobile/src/store/session.ts` — so the request model is the only boundary
 there is.
+
+---
+
+## 13. Field response + camera health — contracts amendment (v1.3.0)
+
+> ⚠️ **NEEDS A TEAM ACK.** Owners touched: **M4** (incidents own the response
+> lifecycle), **M5** (table, migration, endpoints), **M6** (generated types,
+> phone screens). Same additive terms as §10 and §12.
+
+**Why it exists.** The phone app was carrying three buttons whose effect never
+left the device, each with an apology written next to it. Two of them were
+tolerable; the third was an ambulance. This closes all three.
+
+| Added | Where |
+|---|---|
+| `ResponseState`, `CameraState` | `enums.py` — new StrEnums |
+| `TERMINAL_RESPONSE_STATES`, `RESPONSE_ORDER` | `enums.py` |
+| `WSMessageType.INCIDENT_RESPONSE` | `enums.py` — a new member |
+| `IncidentResponse`, `CameraStatus` | `models.py` — 18 → **20** models |
+| `incident_responses` table + migration `0003` | `packages/db/**` (10 → **11** tables) |
+| `POST /api/events/{id}/evidence`, `GET /api/events/photos/{f}` | `routers/events.py` |
+| `PATCH/GET /api/incidents/{id}/response`, `GET /api/incidents/responses` | `routers/incidents.py` |
+| `GET /api/fleet/{bus_id}/cameras` | `routers/fleet.py` |
+| `services/cloud/api/media.py` | shared photo store, extracted from reports |
+
+`alembic revision --autogenerate` comes back **empty** after `0003` — verified.
+
+### The response log is append-only
+
+One row per state change, not a status column on `incidents`. Two reasons, and
+the second is the one that matters: the incidents table is not written at
+runtime yet, so there is no row to hang a column off — and **"when was the unit
+dispatched" is the question this data exists to answer.** An overwritten column
+cannot answer it. The response interval is the single number an incident review
+wants, and a mutable status destroys it.
+
+There is no foreign key to `incidents` for the same reason: incidents live in
+an in-memory deque today, so a constraint would reject every insert. The
+constraint becomes correct to add the day M4 persists them.
+
+Transitions are forward-only, except `CLOSED`, which is reachable from anywhere
+— a crew can stand down from an incident they never reached. Going backwards is
+a **409, not a silent accept**: a second phone tapping Accept on an incident
+already `ON_SCENE` is holding stale state, and telling it so is how it finds out.
+
+### Camera status is derived, and says so on the wire
+
+`CameraStatus.derived` is a field, not a comment. Urban Twin has no
+camera-health channel — a bus reports position, not lens condition. What is
+real: `OFFLINE` (the bus stopped reporting) and `last_frame_age_s`. What is
+simulated: `OBSTRUCTED`, deterministically per bus id, so the state exists for
+a driver to recognise and the screen does not flicker between polls.
+
+Putting the flag on the wire rather than in a docstring means any consumer can
+tell inferred from sensed, and the day a real health channel lands it flips to
+`false` and nothing else changes.
+
+**The constant is pinned by a test, not by taste.** The first rule keyed off
+the wrong hash byte and missed all six seeded buses, so `OBSTRUCTED` was
+unreachable on a stock `make dev` — an unreachable state is an untested state,
+and the entire point of it is recognition before the fact. `test_module.py`
+asserts the seeded fleet still exercises it *and* that not every bus does, so
+the property is pinned while the rule stays free to change.
+
+### Crew photos join the same evidence list
+
+A crew's photo goes into `Event.evidence_uris` alongside the camera frames
+rather than into a crew-only field. The list means "everything anyone has seen
+of this defect"; splitting it by who held the camera would make every consumer
+remember to read two places. Uploads are suffixed by position, because the
+event id alone is not unique per upload and the second photo would overwrite
+the first.
+
+Adding evidence is a separate endpoint from `PATCH .../status` on purpose. A
+crew photographs what they found *before* deciding whether it is an inspection
+or a repair; coupling the two would mean either holding the photo back until
+they commit, or advancing the workflow just to attach a picture.
+
+### One fix that was not part of the plan
+
+`_load_events` built its result in a comprehension, so a single row failing an
+`Event` validator — a `last_seen` earlier than its `first_seen`, which the
+seeder can produce — raised out of the whole read and dropped the API to its
+in-memory cache. On a fresh process that cache is empty, so **one malformed row
+emptied the entire operator backlog while the database was healthy.** Rows are
+now validated individually: a bad one is a warning and a gap, not a blank
+console.

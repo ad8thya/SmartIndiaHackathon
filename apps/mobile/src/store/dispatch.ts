@@ -1,48 +1,73 @@
 /**
- * Which incidents this crew has accepted, and which they have closed.
+ * Which incidents this crew has accepted, dispatched to, or closed.
  *
- * ⚠️  This is LOCAL TO THIS PHONE. There is no dispatch endpoint — the API
- * serves incident dossiers read-only (`GET /api/incidents`), and T5's backend
- * work was scoped to citizen reports. Accepting an incident here does not tell
- * the control room anything.
+ * This used to be `localStorage` and a note apologising for it. It is now the
+ * real thing: every change PATCHes `/api/incidents/{id}/response`, the API
+ * appends a row and broadcasts `INCIDENT_RESPONSE`, and the control room sees
+ * it. A button that looks like it dispatched a unit and did not was the worst
+ * remaining lie in this app, because the thing it was quiet about was an
+ * ambulance.
  *
- * That is a real limitation, not a hidden one: the Emergency screens say so on
- * screen, next to the buttons. The alternative — a button that looks like it
- * dispatched a unit and did not — is the exact failure mode the citizen report
- * had before T5, and it is worse here, because the thing it would be lying
- * about is an ambulance.
+ * State lives in `store/live.ts` alongside everything else the socket feeds,
+ * so a response another crew made shows up here without a refresh. This module
+ * is only the write path and the in-flight/error bookkeeping around it.
  *
- * Making this real is one endpoint (`PATCH /api/incidents/{id}/response`) plus
- * a broadcast, and it belongs with M4/M5 rather than in the phone.
+ * Optimism is deliberately absent. A tap paints "sending", not "dispatched" —
+ * if the PATCH fails the crew must find out immediately, and an optimistic
+ * flip that silently reverts is indistinguishable from the tap not landing.
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { api, ApiError } from '../lib/api';
+import { useLive } from './live';
+import type { ResponseState } from '../lib/types';
 
-export type ResponseState = 'accepted' | 'dispatched' | 'closed';
+/** The crew this phone belongs to. No auth exists to derive it — see crew.ts. */
+export const MY_UNIT = 'GCC-Emergency-Adyar';
 
 interface DispatchState {
-  /** incident_id → where this crew has got to with it. */
-  responses: Record<string, { state: ResponseState; at: number }>;
-  set: (incidentId: string, state: ResponseState) => void;
-  clear: (incidentId: string) => void;
+  /** incident_id → true while its PATCH is in flight. */
+  pending: Record<string, boolean>;
+  /** incident_id → why the last attempt failed, cleared on the next try. */
+  errors: Record<string, string>;
+  advance: (incidentId: string, state: ResponseState, note?: string) => Promise<void>;
 }
 
-export const useDispatch = create<DispatchState>()(
-  persist(
-    (set) => ({
-      responses: {},
-      set: (incidentId, state) =>
-        set((current) => ({
-          responses: { ...current.responses, [incidentId]: { state, at: Date.now() } },
-        })),
-      clear: (incidentId) =>
-        set((current) => {
-          const next = { ...current.responses };
-          delete next[incidentId];
-          return { responses: next };
-        }),
-    }),
-    { name: 'urban-twin.mobile.dispatch', version: 1 },
-  ),
-);
+export const useDispatch = create<DispatchState>((set, get) => ({
+  pending: {},
+  errors: {},
+
+  async advance(incidentId, state, note) {
+    if (get().pending[incidentId]) return;
+    set((current) => ({
+      pending: { ...current.pending, [incidentId]: true },
+      errors: { ...current.errors, [incidentId]: '' },
+    }));
+
+    try {
+      const response = await api.setIncidentResponse(incidentId, {
+        state,
+        team: MY_UNIT,
+        note,
+      });
+      // Write straight into the live cache too. The broadcast will arrive and
+      // land on the same value, but waiting for the round trip would leave the
+      // button looking unpressed for as long as the socket takes.
+      useLive.getState().applyResponse(response);
+    } catch (cause) {
+      set((current) => ({
+        errors: {
+          ...current.errors,
+          [incidentId]:
+            cause instanceof ApiError && cause.status === 409
+              ? 'Another unit got there first. Pull down to refresh.'
+              : cause instanceof ApiError
+                ? `The control room refused the update (${cause.status}).`
+                : 'No signal — this was not sent. Use your radio and try again.',
+        },
+      }));
+    } finally {
+      set((current) => ({ pending: { ...current.pending, [incidentId]: false } }));
+    }
+  },
+}));

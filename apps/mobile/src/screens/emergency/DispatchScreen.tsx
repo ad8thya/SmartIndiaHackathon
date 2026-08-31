@@ -9,42 +9,37 @@
  * reading "about 8 min, straight line" knows what they have.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Ambulance, Clock, MapPin, Navigation, Ruler } from 'lucide-react';
 import { MapScreen } from '../../components/map/MapScreen';
 import type { MapLine, MapMarker } from '../../components/map/UTMap';
-import { api } from '../../lib/api';
-import { useDispatch } from '../../store/dispatch';
+import { useLive } from '../../store/live';
 import { useGeolocation } from '../../lib/useGeolocation';
 import { distanceLabel, distanceM, timeAgo } from '../../lib/display';
-import type { IncidentReport } from '../../lib/types';
 
 /** Chennai city traffic, blue-light. Deliberately conservative. */
 const ASSUMED_KMPH = 28;
 
 export function DispatchScreen() {
-  const [incidents, setIncidents] = useState<IncidentReport[] | null>(null);
-  const responses = useDispatch((s) => s.responses);
+  const incidents = useLive((s) => s.incidents);
+  const responses = useLive((s) => s.responses);
   const { state: geo, locate } = useGeolocation();
 
   useEffect(() => {
-    void api
-      .incidents({ limit: 50 })
-      .then(setIncidents)
-      .catch(() => setIncidents([]));
     locate();
   }, [locate]);
 
   const from = geo.status === 'ok' ? { lat: geo.lat, lon: geo.lon } : null;
 
+  /** The incident this crew is currently driving to: the one they most
+   *  recently acted on that is not closed. */
   const target = useMemo(() => {
-    const open = Object.entries(responses)
-      .filter(([, value]) => value.state !== 'closed')
-      // Most recently acted on — the one they are actually driving to.
-      .sort((a, b) => b[1].at - a[1].at)[0];
+    const open = Object.values(responses)
+      .filter((response) => response.state !== 'CLOSED')
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0];
     if (!open) return null;
-    return (incidents ?? []).find((incident) => incident.incident_id === open[0]) ?? null;
+    return incidents.find((incident) => incident.incident_id === open.incident_id) ?? null;
   }, [responses, incidents]);
 
   const metres = target && from ? distanceM(from, target) : null;

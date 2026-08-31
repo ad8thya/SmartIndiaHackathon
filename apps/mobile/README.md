@@ -93,11 +93,14 @@ Written here *and* in the UI next to the thing itself:
 | | |
 |---|---|
 | Login | No account system. Any password. See above. |
-| Crew photo upload | No endpoint — only citizen reports have one. The button says so. |
-| Emergency accept / dispatch | Local to the phone. The control room is not told. Said next to the buttons. |
-| Camera tiles | No video and no camera-health feed. Status is inferred from bus telemetry; the obstruction tile is a marked example. |
+| Camera obstruction | A bus reports position, not lens condition. Online state and frame age are real; `OBSTRUCTED` is simulated, and the API says so per row via `CameraStatus.derived` — the screen reads that flag rather than hard-coding the caveat. |
 | Dispatch ETA | Straight line at 28 km/h, labelled as such. There is no routing engine on the phone. |
 | Reverse geocoding | Nearest of 26 seeded segments. Says "near <street>", never an exact address, and the field is editable. |
+| Alerts scope | Proximity, not a ward boundary — this project has no ward polygons. The banner says "within 2 km of you", or "across the city" with no fix. |
+
+Three things on this list were fixed rather than documented: crew photo upload,
+emergency accept/dispatch, and camera status all have real endpoints now
+(BUILD.md §13). Each was a button whose effect never left the device.
 
 ## Types are generated
 

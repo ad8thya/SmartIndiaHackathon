@@ -6,37 +6,29 @@
  * like an official record and is not is worse than no log.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { FileText, RotateCcw } from 'lucide-react';
+import { useMemo } from 'react';
+import { FileText } from 'lucide-react';
 import { BlockRenderer } from '../../components/blocks/BlockRenderer';
 import type { Block } from '../../components/blocks/types';
-import { api } from '../../lib/api';
 import { classLabel, timeAgo } from '../../lib/display';
 import { useDispatch } from '../../store/dispatch';
-import type { IncidentReport } from '../../lib/types';
+import { useLive } from '../../store/live';
 
 export function LogScreen() {
-  const [incidents, setIncidents] = useState<IncidentReport[] | null>(null);
-  const responses = useDispatch((s) => s.responses);
-  const setResponse = useDispatch((s) => s.set);
-  const clear = useDispatch((s) => s.clear);
-
-  useEffect(() => {
-    void api
-      .incidents({ limit: 100 })
-      .then(setIncidents)
-      .catch(() => setIncidents([]));
-  }, []);
+  const incidents = useLive((s) => s.incidents);
+  const responses = useLive((s) => s.responses);
+  const hydrated = useLive((s) => s.hydrated);
+  const advance = useDispatch((s) => s.advance);
 
   const blocks = useMemo<Block[]>(() => {
-    if (incidents === null) return [{ kind: 'skeleton', id: 'loading', rows: 3 }];
+    if (!hydrated) return [{ kind: 'skeleton', id: 'loading', rows: 3 }];
 
     const closed = incidents.filter(
-      (incident) => responses[incident.incident_id]?.state === 'closed',
+      (incident) => responses[incident.incident_id]?.state === 'CLOSED',
     );
     const open = incidents.filter((incident) => {
       const state = responses[incident.incident_id]?.state;
-      return state === 'accepted' || state === 'dispatched';
+      return state !== undefined && state !== 'CLOSED';
     });
 
     const list: Block[] = [];
@@ -54,13 +46,19 @@ export function LogScreen() {
             meta: timeAgo(incident.ts),
             chips: [
               {
-                label: responses[incident.incident_id].state === 'dispatched' ? 'Dispatched' : 'Accepted',
+                label: responses[incident.incident_id].state.replace(/_/g, ' ').toLowerCase(),
                 tone: 'warn' as const,
+              },
+            ],
+            details: [
+              {
+                icon: FileText,
+                text: `${responses[incident.incident_id].state.replace(/_/g, ' ').toLowerCase()} ${timeAgo(responses[incident.incident_id].at)}`,
               },
             ],
             primary: {
               label: 'Close',
-              onClick: () => setResponse(incident.incident_id, 'closed'),
+              onClick: () => void advance(incident.incident_id, 'CLOSED'),
               tone: 'good' as const,
             },
           })),
@@ -80,11 +78,12 @@ export function LogScreen() {
             sub: incident.narrative,
             meta: timeAgo(incident.ts),
             chips: [{ label: 'Closed', tone: 'neutral' as const }],
-            secondary: {
-              label: 'Reopen',
-              icon: RotateCcw,
-              onClick: () => clear(incident.incident_id),
-            },
+            details: [
+              {
+                icon: FileText,
+                text: `Closed ${timeAgo(responses[incident.incident_id].at)} by ${responses[incident.incident_id].team || 'your unit'}`,
+              },
+            ],
           })),
         },
       );
@@ -107,11 +106,11 @@ export function LogScreen() {
       kind: 'note',
       id: 'note',
       icon: FileText,
-      text: 'This log is stored on this phone only. It is a personal record of your shift, not the official incident record.',
+      text: 'Every state change is timestamped and kept by the control room, so the response interval is on the record. Closing an incident here closes it for everyone.',
     });
 
     return list;
-  }, [incidents, responses, setResponse, clear]);
+  }, [incidents, responses, hydrated, advance]);
 
   return <BlockRenderer blocks={blocks} />;
 }

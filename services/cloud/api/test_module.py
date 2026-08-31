@@ -525,7 +525,7 @@ def test_photo_that_is_not_an_image_is_refused_loudly(client: TestClient, media_
 def test_oversized_photo_is_refused_before_it_is_decoded(
     client: TestClient, media_dir: object
 ) -> None:
-    from services.cloud.api.routers.reports import MAX_PHOTO_BYTES
+    from services.cloud.api.media import MAX_PHOTO_BYTES
 
     huge = "data:image/jpeg;base64," + "A" * (MAX_PHOTO_BYTES * 4 // 3 + 64)
     assert client.post("/api/reports", json=_report_body(photo=huge)).status_code == 413
@@ -592,3 +592,188 @@ def test_submitting_a_report_broadcasts_report_new(client: TestClient, media_dir
     assert new[0]["payload"]["report_id"] == report["report_id"]
     # The frame carries the path, not the image — see the note on photo_uri.
     assert "base64" not in json.dumps(new[0])
+
+
+# ── crew evidence, incident response, camera health ─────────────────────────
+# The three endpoints that closed the phone app's "no backend yet" gaps. Each
+# one used to be a button whose effect never left the device.
+
+
+def test_crew_can_attach_a_photo_to_a_work_order(client: TestClient, media_dir: object) -> None:
+    # Its own event, so the test does not depend on what happens to be seeded.
+    event = make_event(WorkflowStatus.INSPECTION)
+    before = len(event.evidence_uris)
+
+    posted = client.post(
+        f"/api/events/{event.event_id}/evidence",
+        json={"photo": TINY_PNG, "note": "Patched and compacted.", "team": "GCC-Zone-13-Adyar"},
+    )
+    assert posted.status_code == 200, posted.text
+
+    uris = posted.json()["evidence_uris"]
+    assert len(uris) == before + 1
+    # A path, never the base64 — the same rule citizen photos follow, and for
+    # the same reason: this list rides along in every EVENT_UPDATED frame.
+    assert uris[-1].startswith("/api/events/photos/")
+    assert "base64" not in uris[-1]
+
+    served = client.get(uris[-1])
+    assert served.status_code == 200
+    assert served.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_two_crew_photos_do_not_overwrite_each_other(
+    client: TestClient, media_dir: object
+) -> None:
+    """The event id alone is not unique per upload — the suffix is what saves
+    the first photo when a second arrives."""
+    event = make_event(WorkflowStatus.INSPECTION)
+    first = client.post(f"/api/events/{event.event_id}/evidence", json={"photo": TINY_PNG})
+    second = client.post(f"/api/events/{event.event_id}/evidence", json={"photo": TINY_PNG})
+
+    uris = second.json()["evidence_uris"]
+    assert first.json()["evidence_uris"][-1] != uris[-1]
+    assert client.get(uris[-2]).status_code == 200
+    assert client.get(uris[-1]).status_code == 200
+
+
+def test_empty_evidence_is_refused_rather_than_a_silent_no_op(
+    client: TestClient, media_dir: object
+) -> None:
+    event = make_event()
+    refused = client.post(f"/api/events/{event.event_id}/evidence", json={"note": "   "})
+    assert refused.status_code == 422
+
+
+def test_evidence_broadcasts_so_the_console_sees_the_photo(
+    client: TestClient, media_dir: object
+) -> None:
+    import json
+
+    from services.cloud.api.hub import broadcaster
+
+    event = make_event()
+    queue = broadcaster.subscribe()
+    try:
+        client.post(f"/api/events/{event.event_id}/evidence", json={"photo": TINY_PNG})
+        frames = []
+        while not queue.empty():
+            frames.append(json.loads(queue.get_nowait()))
+    finally:
+        broadcaster.unsubscribe(queue)
+
+    updated = [f for f in frames if f["type"] == WSMessageType.EVENT_UPDATED]
+    assert len(updated) == 1
+    assert "base64" not in json.dumps(updated[0])
+
+
+def test_incident_response_advances_and_broadcasts(client: TestClient) -> None:
+    import json
+
+    from services.cloud.api.hub import broadcaster
+
+    incident_id = str(uuid4())
+    queue = broadcaster.subscribe()
+    try:
+        accepted = client.patch(
+            f"/api/incidents/{incident_id}/response",
+            json={"state": "ACCEPTED", "team": "GCC-Emergency-Adyar"},
+        )
+        assert accepted.status_code == 200, accepted.text
+        assert accepted.json()["state"] == "ACCEPTED"
+
+        dispatched = client.patch(
+            f"/api/incidents/{incident_id}/response", json={"state": "DISPATCHED"}
+        )
+        assert dispatched.status_code == 200
+
+        frames = []
+        while not queue.empty():
+            frames.append(json.loads(queue.get_nowait()))
+    finally:
+        broadcaster.unsubscribe(queue)
+
+    responses = [f for f in frames if f["type"] == WSMessageType.INCIDENT_RESPONSE]
+    assert [f["payload"]["state"] for f in responses] == ["ACCEPTED", "DISPATCHED"]
+
+
+def test_response_cannot_go_backwards(client: TestClient) -> None:
+    """A second phone tapping Accept on an incident already dispatched has
+    stale state, and 409 is how it finds out."""
+    incident_id = str(uuid4())
+    client.patch(f"/api/incidents/{incident_id}/response", json={"state": "DISPATCHED"})
+
+    backwards = client.patch(
+        f"/api/incidents/{incident_id}/response", json={"state": "ACCEPTED"}
+    )
+    assert backwards.status_code == 409
+    assert "already" in backwards.text
+
+    # CLOSED is reachable from anywhere — a crew can stand down from an
+    # incident they never reached.
+    assert (
+        client.patch(f"/api/incidents/{incident_id}/response", json={"state": "CLOSED"}).status_code
+        == 200
+    )
+
+
+def test_response_history_keeps_every_state_change(client: TestClient) -> None:
+    """The interval is the point. An overwritten status column would lose it."""
+    incident_id = str(uuid4())
+    # not `state` — that name is the module-level LiveState import
+    for rung in ("ACCEPTED", "DISPATCHED", "ON_SCENE"):
+        client.patch(f"/api/incidents/{incident_id}/response", json={"state": rung})
+
+    history = client.get(f"/api/incidents/{incident_id}/response").json()
+    assert [row["state"] for row in history] == ["ACCEPTED", "DISPATCHED", "ON_SCENE"]
+    assert history[0]["at"] <= history[-1]["at"]
+
+
+def test_responses_list_is_not_parsed_as_a_uuid(client: TestClient) -> None:
+    """/api/incidents/responses must not match /api/incidents/{incident_id}."""
+    assert client.get("/api/incidents/responses").status_code == 200
+
+
+def test_camera_status_is_derived_and_says_so(client: TestClient) -> None:
+    bus_id = client.get("/api/fleet").json()[0]["bus_id"]
+    cameras = client.get(f"/api/fleet/{bus_id}/cameras").json()
+
+    assert [c["lens"] for c in cameras] == ["front", "rear", "left", "right"]
+    # The honesty flag is on the wire, not in a comment: a consumer can tell
+    # this is inferred rather than sensed.
+    assert all(c["derived"] is True for c in cameras)
+    assert all(c["state"] in {"OK", "OBSTRUCTED", "OFFLINE"} for c in cameras)
+
+
+def test_camera_obstruction_is_stable_for_a_bus(client: TestClient) -> None:
+    """Deterministic, not random: a value that changes on every poll makes the
+    screen flicker and the demo unreproducible."""
+    bus_id = client.get("/api/fleet").json()[0]["bus_id"]
+    first = client.get(f"/api/fleet/{bus_id}/cameras").json()
+    second = client.get(f"/api/fleet/{bus_id}/cameras").json()
+    assert [c["state"] for c in first] == [c["state"] for c in second]
+
+
+def test_cameras_for_an_unknown_bus_are_404(client: TestClient) -> None:
+    assert client.get("/api/fleet/MTC-NOPE-9999/cameras").status_code == 404
+
+
+def test_the_obstructed_state_is_reachable_on_the_real_fleet() -> None:
+    """An unreachable state is an untested state.
+
+    The obstruction rule keyed off the wrong hash byte at first and missed all
+    six seeded buses, so OBSTRUCTED never appeared on a stock `make dev` — and
+    the whole reason that state exists is that a driver should recognise it
+    before the day it happens. This pins the property, not the constant: any
+    rule is fine as long as some seeded bus still shows it and not all of them
+    do.
+    """
+    from citydata import BUSES
+
+    from services.cloud.api.routers.fleet import _obstructed_lens
+
+    fleet = [bus.bus_id for bus in BUSES]
+    obstructed = [bus_id for bus_id in fleet if _obstructed_lens(bus_id) is not None]
+
+    assert obstructed, "no seeded bus ever shows an obstructed lens — the state is unreachable"
+    assert len(obstructed) < len(fleet), "every bus is obstructed — the rate is wrong"

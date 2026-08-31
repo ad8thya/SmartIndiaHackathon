@@ -23,7 +23,13 @@ import { create } from 'zustand';
 import { api } from '../lib/api';
 import { PUBLIC_STATUSES } from '../lib/display';
 import { LiveSocket, type ConnectionState } from '../lib/ws';
-import type { CitizenReport, IncidentReport, UTEvent, WSMessage } from '../lib/types';
+import type {
+  CitizenReport,
+  IncidentReport,
+  IncidentResponse,
+  UTEvent,
+  WSMessage,
+} from '../lib/types';
 import type { MobileRoleId } from '../roles/catalog';
 
 /** How long without any frame before the connection is treated as suspect. */
@@ -41,6 +47,17 @@ interface LiveState {
   events: Record<string, UTEvent>;
   reports: CitizenReport[];
   incidents: IncidentReport[];
+  /**
+   * incident_id → the latest response any crew has made.
+   *
+   * Keyed rather than a list because "where is this incident up to" is the
+   * only question the screens ask, and the full history is a separate
+   * endpoint for the one screen that wants it.
+   */
+  responses: Record<string, IncidentResponse>;
+
+  /** Merge a response we just wrote, without waiting for the broadcast. */
+  applyResponse: (response: IncidentResponse) => void;
 
   connect: (role: MobileRoleId) => void;
   disconnect: () => void;
@@ -69,14 +86,17 @@ export const useLive = create<LiveState>((set, get) => ({
   events: {},
   reports: [],
   incidents: [],
+  responses: {},
 
   async hydrate(role) {
     // Each request is settled independently: a failing incidents endpoint must
     // not leave the map empty, which is what a single Promise.all would do.
-    const [events, reports, incidents] = await Promise.allSettled([
+    const [events, reports, incidents, responses] = await Promise.allSettled([
       api.events(role === 'citizen' ? { status: [...PUBLIC_STATUSES], limit: 500 } : { limit: 500 }),
       api.reports({ limit: 200 }),
       api.incidents({ limit: 50 }),
+      // Only the role that acts on them asks for them.
+      role === 'emergency-team' ? api.incidentResponses() : Promise.resolve([]),
     ]);
 
     const nextEvents: Record<string, UTEvent> = {};
@@ -90,6 +110,10 @@ export const useLive = create<LiveState>((set, get) => ({
       events: nextEvents,
       reports: reports.status === 'fulfilled' ? reports.value : [],
       incidents: incidents.status === 'fulfilled' ? incidents.value : [],
+      responses:
+        responses.status === 'fulfilled'
+          ? Object.fromEntries(responses.value.map((r) => [r.incident_id, r]))
+          : {},
       hydrated: true,
       // Only a total failure is "offline". One endpoint being down is a gap,
       // not a disconnection, and telling the user they have no signal when
@@ -157,6 +181,17 @@ export const useLive = create<LiveState>((set, get) => ({
             break;
           }
 
+          case 'INCIDENT_RESPONSE': {
+            // Another crew moved on an incident. Last write wins, which is
+            // correct: the API refuses backwards transitions, so a frame that
+            // arrives is always at least as advanced as what we hold.
+            const response = message.payload as unknown as IncidentResponse;
+            set({
+              responses: { ...get().responses, [response.incident_id]: response },
+            });
+            break;
+          }
+
           case 'INCIDENT': {
             const incident = message.payload as unknown as IncidentReport;
             set({ incidents: [incident, ...get().incidents].slice(0, 200) });
@@ -178,6 +213,10 @@ export const useLive = create<LiveState>((set, get) => ({
     });
 
     socket.connect();
+  },
+
+  applyResponse(response) {
+    set({ responses: { ...get().responses, [response.incident_id]: response } });
   },
 
   disconnect() {

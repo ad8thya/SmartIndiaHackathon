@@ -11,13 +11,21 @@
  * the shared `InfoCard` would either constrain them or bloat it.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, Ambulance, Check, Clock, MapPin, Navigation, ShieldAlert } from 'lucide-react';
-import { api } from '../../lib/api';
+import {
+  AlertCircle,
+  Ambulance,
+  Check,
+  Clock,
+  Loader2,
+  MapPin,
+  Navigation,
+  ShieldAlert,
+} from 'lucide-react';
 import { classLabel, timeAgo } from '../../lib/display';
 import { useDispatch } from '../../store/dispatch';
-import { haptic } from '../../lib/haptics';
+import { useLive } from '../../store/live';
 import type { IncidentReport } from '../../lib/types';
 
 /** Collisions outrank everything; a near miss outranks nothing. */
@@ -32,24 +40,18 @@ function severityOf(incident: IncidentReport): { tone: string; label: string; ra
 }
 
 export function EmergencyAlertsScreen() {
-  const [incidents, setIncidents] = useState<IncidentReport[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const responses = useDispatch((s) => s.responses);
-  const setResponse = useDispatch((s) => s.set);
-
-  useEffect(() => {
-    void api
-      .incidents({ limit: 50 })
-      .then(setIncidents)
-      .catch((cause: unknown) =>
-        setError(cause instanceof Error ? cause.message : 'could not load incidents'),
-      );
-  }, []);
+  const incidents = useLive((s) => s.incidents);
+  const responses = useLive((s) => s.responses);
+  const hydrated = useLive((s) => s.hydrated);
+  const error = useLive((s) => s.loadError);
+  const advance = useDispatch((s) => s.advance);
+  const pending = useDispatch((s) => s.pending);
+  const errors = useDispatch((s) => s.errors);
 
   const active = useMemo(
     () =>
-      (incidents ?? [])
-        .filter((incident) => responses[incident.incident_id]?.state !== 'closed')
+      incidents
+        .filter((incident) => responses[incident.incident_id]?.state !== 'CLOSED')
         .sort((a, b) => {
           const bySeverity = severityOf(a).rank - severityOf(b).rank;
           return bySeverity !== 0
@@ -67,7 +69,7 @@ export function EmergencyAlertsScreen() {
     );
   }
 
-  if (incidents === null) {
+  if (!hydrated) {
     return (
       <div className="flex flex-col gap-3 px-4 pt-4">
         {[0, 1].map((index) => (
@@ -93,6 +95,8 @@ export function EmergencyAlertsScreen() {
       {active.map((incident, index) => {
         const severity = severityOf(incident);
         const response = responses[incident.incident_id]?.state;
+        const busy = pending[incident.incident_id] === true;
+        const failure = errors[incident.incident_id];
         return (
           <motion.article
             key={incident.incident_id}
@@ -129,37 +133,58 @@ export function EmergencyAlertsScreen() {
               {response ? (
                 <div className="mt-4 flex items-center gap-2 rounded-[12px] bg-emerald/10 px-4 py-3 text-[14px] font-medium text-emerald">
                   <Check size={17} />
-                  {response === 'accepted' ? 'Accepted by you' : 'Unit dispatched'}
+                  {response === 'ACCEPTED'
+                    ? 'Accepted — the control room has been told'
+                    : response === 'DISPATCHED'
+                      ? 'Unit dispatched'
+                      : 'Your unit is on scene'}
                 </div>
               ) : null}
 
               <div className="mt-4 flex gap-2.5">
                 {!response ? (
                   <button
-                    onClick={() => {
-                      haptic('confirm');
-                      setResponse(incident.incident_id, 'accepted');
-                    }}
-                    className="ut-touch flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-accent px-4 py-3.5 text-[16px] font-medium text-white"
+                    onClick={() => void advance(incident.incident_id, 'ACCEPTED')}
+                    disabled={busy}
+                    className="ut-touch flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-accent px-4 py-3.5 text-[16px] font-medium text-white disabled:opacity-60"
                   >
-                    <Check size={18} /> Accept
+                    {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                    Accept
                   </button>
                 ) : null}
 
-                <button
-                  onClick={() => {
-                    haptic('confirm');
-                    setResponse(incident.incident_id, 'dispatched');
-                  }}
-                  className={`ut-touch flex flex-1 items-center justify-center gap-2 rounded-[12px] px-4 py-3.5 text-[16px] font-medium ${
-                    response === 'dispatched'
-                      ? 'border border-line bg-card text-ink-soft'
-                      : 'bg-danger text-white'
-                  }`}
-                >
-                  <Ambulance size={18} />
-                  {response === 'dispatched' ? 'Dispatched' : 'Dispatch'}
-                </button>
+                {response !== 'ON_SCENE' ? (
+                  <button
+                    onClick={() =>
+                      void advance(
+                        incident.incident_id,
+                        response === 'DISPATCHED' ? 'ON_SCENE' : 'DISPATCHED',
+                      )
+                    }
+                    disabled={busy}
+                    className={`ut-touch flex flex-1 items-center justify-center gap-2 rounded-[12px] px-4 py-3.5 text-[16px] font-medium disabled:opacity-60 ${
+                      response === 'DISPATCHED'
+                        ? 'border border-line bg-card text-ink'
+                        : 'bg-danger text-white'
+                    }`}
+                  >
+                    {busy ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <Ambulance size={18} />
+                    )}
+                    {response === 'DISPATCHED' ? 'Arrived' : 'Dispatch'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void advance(incident.incident_id, 'CLOSED')}
+                    disabled={busy}
+                    className="ut-touch flex flex-1 items-center justify-center gap-2 rounded-[12px] bg-emerald px-4 py-3.5 text-[16px] font-medium text-white disabled:opacity-60"
+                  >
+                    {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                    Close
+                  </button>
+                )}
 
                 {response ? (
                   <a
@@ -171,15 +196,22 @@ export function EmergencyAlertsScreen() {
                   </a>
                 ) : null}
               </div>
+
+              {/* A failed dispatch must be impossible to miss. */}
+              {failure ? (
+                <div className="mt-2.5 flex items-start gap-2 rounded-[12px] bg-danger/10 px-3.5 py-3">
+                  <AlertCircle size={15} className="mt-0.5 flex-none text-danger" />
+                  <p className="text-[13px] leading-snug text-danger">{failure}</p>
+                </div>
+              ) : null}
             </div>
           </motion.article>
         );
       })}
 
-      {/* The limitation, next to the buttons it applies to. Not in a README. */}
       <p className="px-1 pt-1 text-[12px] leading-relaxed text-ink-faint">
-        Accept and Dispatch are recorded on this phone only — Urban Twin has no dispatch service
-        yet, so the control room is not told. Use your radio as usual.
+        Accept, Dispatch and Arrived are sent to the control room and timestamped. Every state
+        change is kept, so the response interval is on the record.
       </p>
     </div>
   );

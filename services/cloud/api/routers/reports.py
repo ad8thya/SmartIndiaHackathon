@@ -22,12 +22,8 @@ every connected console.
 
 from __future__ import annotations
 
-import base64
-import binascii
 import logging
-import re
 from datetime import UTC, datetime
-from pathlib import Path
 from uuid import UUID, uuid4
 
 from contracts import CitizenReport, ReportCategory, ReportStatus, WSMessageType
@@ -40,28 +36,10 @@ from sqlalchemy import select
 
 from ..deps import Bus, Settings, State
 from ..hub import LiveState
+from ..media import resolve_photo, store_photo
 
 log = logging.getLogger("urban-twin.reports")
 router = APIRouter(prefix="/api", tags=["reports"])
-
-#: Decoded image size cap. A modern phone camera JPEG is 2–5 MB; 8 MB leaves
-#: room for that without letting an unauthenticated endpoint (there is no auth
-#: on this prototype — see apps/mobile/src/store/session.ts) fill the disk one
-#: request at a time.
-MAX_PHOTO_BYTES = 8 * 1024 * 1024
-_TOO_BIG = f"photo exceeds {MAX_PHOTO_BYTES // 1024 // 1024} MB"
-
-#: What we are willing to decode and write. Not a security boundary on its own
-#: — the bytes are never executed and are served with this content type — but
-#: it stops a caller storing arbitrary files through an image field.
-ALLOWED_PHOTO_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-}
-
-_DATA_URI = re.compile(r"^data:(?P<mime>[\w.+-]+/[\w.+-]+);base64,(?P<data>.+)$", re.DOTALL)
-
 
 class ReportCreate(BaseModel):
     """POST /api/reports body.
@@ -104,57 +82,6 @@ class ReportCreate(BaseModel):
             ]
         }
     }
-
-
-def _photos_dir(media_root: str) -> Path:
-    directory = Path(media_root) / "reports"
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
-
-
-def _store_photo(data_uri: str, report_id: UUID, media_root: str) -> str:
-    """Decode a data URI to a file and return the path this API serves it at.
-
-    Raises HTTPException(422) rather than silently dropping the photo: a
-    citizen who took a picture and got back a report with no image would have
-    no way to tell that the one piece of evidence they gathered was discarded.
-    """
-    match = _DATA_URI.match(data_uri.strip())
-    if match is None:
-        raise HTTPException(
-            status_code=422,
-            detail="photo must be a base64 data URI, e.g. 'data:image/jpeg;base64,...'",
-        )
-
-    mime = match.group("mime").lower()
-    suffix = ALLOWED_PHOTO_TYPES.get(mime)
-    if suffix is None:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"unsupported photo type {mime!r} — "
-                f"use {', '.join(sorted(ALLOWED_PHOTO_TYPES))}"
-            ),
-        )
-
-    # Check the encoded length first. base64 is 4/3 of the payload, so this
-    # rejects an oversized upload before allocating the decoded copy.
-    if len(match.group("data")) > MAX_PHOTO_BYTES * 4 // 3 + 4:
-        raise HTTPException(status_code=413, detail=_TOO_BIG)
-
-    try:
-        blob = base64.b64decode(match.group("data"), validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="photo is not valid base64") from exc
-
-    if len(blob) > MAX_PHOTO_BYTES:
-        raise HTTPException(status_code=413, detail=_TOO_BIG)
-
-    # The filename is the report's own uuid, so it is unguessable-ish and can
-    # never collide or traverse — nothing from the request reaches the path.
-    path = _photos_dir(media_root) / f"{report_id}{suffix}"
-    path.write_bytes(blob)
-    return f"/api/reports/photos/{path.name}"
 
 
 def _row_to_report(row: ReportRow) -> CitizenReport:
@@ -213,7 +140,9 @@ async def create_report(
     report_id = uuid4()
 
     photo_uri = (
-        _store_photo(body.photo, report_id, settings.MEDIA_DIR) if body.photo else None
+        store_photo(body.photo, report_id, settings.MEDIA_DIR, kind="reports")
+        if body.photo
+        else None
     )
 
     report = CitizenReport(
@@ -293,17 +222,8 @@ async def list_reports(
 # "photos" first and every image request 422s on the path parameter.
 @router.get("/reports/photos/{filename}", include_in_schema=False)
 async def get_report_photo(filename: str, settings: Settings) -> FileResponse:
-    """Serve a stored report photo.
-
-    ``filename`` is never trusted: the resolved path must still be inside the
-    photo directory, which rules out `../` traversal regardless of what
-    Starlette did or did not normalise on the way in.
-    """
-    directory = _photos_dir(settings.MEDIA_DIR).resolve()
-    candidate = (directory / filename).resolve()
-    if not candidate.is_relative_to(directory) or not candidate.is_file():
-        raise HTTPException(status_code=404, detail="no such photo")
-    return FileResponse(candidate)
+    """Serve a stored report photo. Traversal is refused in `media.py`."""
+    return FileResponse(resolve_photo(settings.MEDIA_DIR, "reports", filename))
 
 
 @router.get("/reports/{report_id}", response_model=CitizenReport, summary="One report")

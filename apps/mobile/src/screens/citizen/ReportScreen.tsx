@@ -10,11 +10,8 @@
  * dance — and it is the one approach that works identically on iOS Safari,
  * Android Chrome and a laptop, which is what a demo needs.
  *
- * The file is downscaled before it is sent. A modern phone camera produces 3–8
- * MB; nothing on the receiving end needs more than 1600px to judge a pothole,
- * and the API caps the upload at 8 MB anyway. Sending the original would make
- * submit-over-mobile-data the slowest part of the app by an order of
- * magnitude.
+ * The file is downscaled before it is sent — see lib/photo.ts, which the crew
+ * evidence screen shares.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -37,6 +34,7 @@ import { reverseGeocode } from '../../lib/geocode';
 import { useGeolocation } from '../../lib/useGeolocation';
 import { haptic } from '../../lib/haptics';
 import { useSession } from '../../store/session';
+import { toDownscaledDataUri } from '../../lib/photo';
 import type { ReportCategory } from '../../lib/types';
 
 const CATEGORIES: ReportCategory[] = [
@@ -47,45 +45,6 @@ const CATEGORIES: ReportCategory[] = [
   'GARBAGE',
   'OTHER',
 ];
-
-/** Long edge, px. Enough to judge a defect, small enough to send on 3G. */
-const MAX_EDGE = 1600;
-const JPEG_QUALITY = 0.82;
-
-/**
- * Downscale to a JPEG data URI. Falls back to the original file if anything in
- * the canvas path fails — a slightly slow upload beats a lost photo.
- */
-async function toDownscaledDataUri(file: File): Promise<string> {
-  const original = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('could not read the photo'));
-    reader.readAsDataURL(file);
-  });
-
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error('could not decode the photo'));
-      element.src = original;
-    });
-
-    const scale = Math.min(1, MAX_EDGE / Math.max(image.width, image.height));
-    if (scale === 1 && original.length < 2_000_000) return original;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(image.width * scale);
-    canvas.height = Math.round(image.height * scale);
-    const context = canvas.getContext('2d');
-    if (!context) return original;
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-  } catch {
-    return original;
-  }
-}
 
 export function ReportScreen() {
   const navigate = useNavigate();
