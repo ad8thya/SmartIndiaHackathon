@@ -254,9 +254,19 @@ def test_bands_are_looked_up_by_place_not_by_route() -> None:
     second bus exists."""
     from services.cloud.repair_verification.tracker import progress_bands
 
-    bands = progress_bands("SEG-27B-003", 13.07795, 80.26820, 40.0)
+    # Anchored on the SEGMENT, not the event. An event is assigned to a
+    # segment by road, not by distance to its midpoint: one observed defect
+    # sat 800 m from its own segment's centre, which is ordinary for a segment
+    # kilometres long. Searching around the event found only its own route and
+    # silently restored the per-route behaviour — 19 clean passes, one bus,
+    # forever. These coordinates are that real event's.
+    bands = progress_bands("SEG-27B-003", 13.07347, 80.26117, 40.0)
     routes = {route for route, _, _ in bands}
-    assert routes == {"27B", "570", "M1"}, f"expected three routes over this tarmac, got {routes}"
+    assert routes == {"27B", "570", "M1"}, f"expected three routes over this road, got {routes}"
+
+    # A segment with no co-located twin gets exactly one band.
+    solo = progress_bands("SEG-51C-000", 12.99485, 80.2582, 40.0)
+    assert {route for route, _, _ in solo} == {"51C"}
 
 
 def test_a_segment_maps_to_a_band_a_bus_cannot_jump_over() -> None:

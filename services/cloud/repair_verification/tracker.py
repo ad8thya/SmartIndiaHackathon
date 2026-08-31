@@ -112,19 +112,36 @@ def progress_bands(
     The band bought robustness against coarse sampling and quietly lost the
     thing the two-bus rule needs.
 
-    So the bands are looked up by PLACE: every segment within `radius_m` of
-    the defect, whichever route it belongs to. Robust to sampling, and a bus
-    on any route over that tarmac now counts.
+    So the bands are looked up by ROAD: the event's own segment, plus every
+    segment co-located WITH THAT SEGMENT.
+
+    Co-located with the segment, not with the event. An event is assigned to a
+    segment by road, not by distance to its midpoint — one observed defect sat
+    800 m from its own segment's centre, which is ordinary for a segment that
+    is kilometres long. Searching around the *event* found nothing but the
+    event's own route and silently reduced this back to the per-route
+    behaviour it was written to replace: 19 clean passes, one bus, forever.
+    Searching around the *segment* finds the roads that really are the same
+    road.
     """
     from citydata import SEGMENTS
+
+    by_id = {segment.road_id: segment for segment in SEGMENTS}
+    anchor = by_id.get(road_segment_id or "")
+    # No segment on the event: fall back to its own coordinates, which is all
+    # there is to go on.
+    anchor_lat, anchor_lon = (
+        (anchor.center[1], anchor.center[0]) if anchor is not None else (lat, lon)
+    )
 
     bands: list[tuple[str, float, float]] = []
     seen: set[str] = set()
 
     for segment in SEGMENTS:
-        if segment.road_id != road_segment_id and (
-            haversine_m(lat, lon, segment.center[1], segment.center[0]) > radius_m
-        ):
+        same_road = segment.road_id == road_segment_id or (
+            haversine_m(anchor_lat, anchor_lon, segment.center[1], segment.center[0]) <= radius_m
+        )
+        if not same_road:
             continue
         band = progress_band(segment.road_id)
         if band is not None and band[0] not in seen:
