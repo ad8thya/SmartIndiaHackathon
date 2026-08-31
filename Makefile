@@ -35,6 +35,7 @@ setup: ## create venv, install python + node deps, generate .env if missing
 	echo "→ python core installed. Perception owners (M1/M3/M4): $(PIP) install -e '.[ml]'"
 	echo "→ traffic owner (M2):                                   $(PIP) install -e '.[geo]'"
 	cd apps/web && npm install --silent
+	cd apps/mobile && npm install --silent
 	echo ""
 	echo "  ✔ setup complete →  make dev"
 
@@ -91,8 +92,9 @@ test: test-py test-js ## run everything
 test-py: ## all python tests
 	$(PYTEST)
 
-test-js: ## frontend unit tests
+test-js: ## frontend unit tests (both apps)
 	cd apps/web && npm run test -- --run
+	cd apps/mobile && npm run test -- --run
 
 mine: ## run ONLY your module's tests (reads .member, or MEMBER=m3)
 	bash scripts/mine.sh $(MEMBER)

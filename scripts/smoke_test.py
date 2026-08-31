@@ -342,7 +342,7 @@ def check_api(report: Report) -> None:
 def check_frontend(report: Report) -> None:
     section("frontend")
     root = Path(__file__).resolve().parents[1]
-    for app_dir in ("apps/web",):
+    for app_dir in ("apps/web", "apps/mobile"):
         installed = (root / app_dir / "node_modules").is_dir()
         report.add(
             f"{app_dir} dependencies installed",
@@ -350,6 +350,38 @@ def check_frontend(report: Report) -> None:
             "" if installed else "run `make setup`",
             required=False,
         )
+
+    # Both apps read the same generated contract types. If they ever differ,
+    # one of them was edited by hand — which is the exact bug the generator
+    # exists to prevent (BUILD.md §5), so it is worth a red line here.
+    web_types = root / "apps/web/src/lib/types.ts"
+    mobile_types = root / "apps/mobile/src/lib/types.ts"
+    if web_types.is_file() and mobile_types.is_file():
+        same = web_types.read_text() == mobile_types.read_text()
+        report.add(
+            "contract types identical across both apps",
+            same,
+            "" if same else "run `make types` — one of them has drifted",
+        )
+    else:
+        report.add(
+            "contract types generated for both apps",
+            False,
+            "run `make types`",
+        )
+
+    # The mobile app deliberately ships no basemap of its own; it reads this
+    # one, through a symlink in dev and the shared origin in production.
+    basemap = root / "apps/mobile/public/map/chennai.pmtiles"
+    report.add(
+        "mobile basemap symlink resolves",
+        basemap.is_file(),
+        f"{basemap.stat().st_size // (1024 * 1024)} MB (shared with apps/web)"
+        if basemap.is_file()
+        else "apps/mobile/public/map is dangling",
+        required=False,
+    )
+
     buildings = root / "apps/web/public/data/buildings.geojson"
     report.add(
         "3D building footprints cached",

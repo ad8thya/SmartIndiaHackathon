@@ -31,6 +31,11 @@ class ApiSettings(BaseSettings):
     #: assume vite is serving the UI" — see services/cloud/api/spa.py.
     WEB_DIST: str | None = None
 
+    #: Same, for apps/mobile. It is mounted under /m rather than / because
+    #: apps/web owns the root in the one-container deployment — the mobile
+    #: build is produced with `VITE_BASE=/m/` to match.
+    MOBILE_DIST: str | None = None
+
     REDIS_URL: str = "redis://localhost:6379/0"
     MQTT_HOST: str = "localhost"
     MQTT_PORT: int = 1883

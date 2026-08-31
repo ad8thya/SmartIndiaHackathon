@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Base layer transcribed from the design canvas export. The parts that look
+ * fussy are the parts that make a web app stop feeling like a web page on a
+ * phone: no tap highlight, no visible scrollbars, no rubber-band overscroll,
+ * no text selection on chrome you are meant to press rather than read.
+ */
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+    margin: 0;
+    /* A phone browser bounces the whole document on overscroll and the fixed
+       top bar goes with it. Scrolling happens inside the canvas instead. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Scrollbars are hidden throughout — the design has none, and on a phone
+     they are drawn as an overlay anyway. */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* The design's press feedback, applied globally rather than per-button so a
+     new button cannot forget it. */
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+    opacity: 0.9;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    background: none;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-ink-faint;
+  }
+
+  /* Chrome that is pressed, not read, should not show a selection caret. */
+  .ut-nosel {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+@layer components {
+  /* .ut-card in the design: 14px radius, white, hairline border. */
+  .ut-card {
+    @apply rounded-card border border-line bg-card;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* .citizen-action-card: bigger radius, a real shadow, lifts on press. */
+  .ut-action-card {
+    @apply rounded-action bg-card;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .ut-action-card:active {
+    transform: scale(0.98);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  /**
+   * Safe areas. `viewport-fit=cover` in index.html is what makes these report
+   * anything but 0. The top bar and the tab bar are the only two things that
+   * need them — everything else lives between the two.
+   */
+  .ut-safe-top {
+    padding-top: max(env(safe-area-inset-top), 12px);
+  }
+
+  .ut-safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 10px);
+  }
+
+  /* Scroll canvas: momentum scrolling, and its own overscroll containment so
+     a flick at the end of a list does not drag the page behind it. */
+  .ut-canvas {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* 44px is the Apple HIG minimum and the floor for every tappable thing. */
+  .ut-touch {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

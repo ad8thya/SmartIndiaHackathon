@@ -33,8 +33,8 @@ log = logging.getLogger("urban-twin.api.spa")
 API_PREFIXES = ("/api", "/health", "/ws", "/docs", "/redoc", "/openapi.json")
 
 
-def find_dist(explicit: str | None = None) -> Path | None:
-    """Locate the built frontend, or None when running against a dev server.
+def find_dist(explicit: str | None = None, *, container_path: str = "/app/web") -> Path | None:
+    """Locate a built frontend, or None when running against a dev server.
 
     A local `apps/web/dist` is deliberately **not** auto-detected: during
     `make dev` vite owns the UI, and quietly serving a stale build from a
@@ -45,8 +45,47 @@ def find_dist(explicit: str | None = None) -> Path | None:
         candidate = Path(explicit)
         return candidate if (candidate / "index.html").is_file() else None
     # the container: the Dockerfile copies the build here
-    container = Path("/app/web")
+    container = Path(container_path)
     return container if (container / "index.html").is_file() else None
+
+
+def mount_mobile(app: FastAPI, dist: Path) -> None:
+    """Serve the mobile app under /m, with its own client-routing fallback.
+
+    Registered **before** `mount_spa` so that `/m/...` is matched here rather
+    than swallowed by the root SPA's catch-all — Starlette resolves routes in
+    registration order, and the root catch-all matches literally everything.
+
+    Note what is deliberately *not* mounted: `/map` and `/data`. The mobile
+    build ships no basemap of its own (see apps/mobile/vite.config.ts) — it
+    reads apps/web's copy at the shared origin, so there is one extract in the
+    image rather than two.
+    """
+    index = dist / "index.html"
+
+    assets = dist / "assets"
+    if assets.is_dir():
+        app.mount("/m/assets", StaticFiles(directory=assets), name="mobile-assets")
+
+    icons = dist / "icons"
+    if icons.is_dir():
+        app.mount("/m/icons", StaticFiles(directory=icons), name="mobile-icons")
+
+    root = dist.resolve()
+
+    @app.get("/m", include_in_schema=False, response_model=None)
+    @app.get("/m/{full_path:path}", include_in_schema=False, response_model=None)
+    def mobile_fallback(request: Request, full_path: str = "") -> FileResponse:
+        # A real file — sw.js, manifest.webmanifest — wins over the fallback.
+        # The service worker in particular MUST be served as itself: hand it
+        # index.html and registration fails with a content-type error that
+        # says nothing about what actually went wrong.
+        candidate = (dist / full_path).resolve()
+        if full_path and candidate.is_relative_to(root) and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
+
+    log.info("serving the mobile app from %s at /m", dist)
 
 
 def mount_spa(app: FastAPI, dist: Path) -> None:

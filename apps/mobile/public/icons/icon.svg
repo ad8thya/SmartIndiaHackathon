@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Urban Twin">
+  <rect width="512" height="512" rx="157" fill="#2563EB"/>
+  <text x="256" y="256" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif"
+        font-size="300" font-weight="800" text-anchor="middle" dominant-baseline="central">U</text>
+</svg>

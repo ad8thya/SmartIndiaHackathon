@@ -1,12 +1,17 @@
-"""Generate apps/web/src/lib/types.ts from packages/contracts.
+"""Generate the frontends' types.ts from packages/contracts.
 
 The frontend used to carry three hand-mirrored copies of the contract types
 (apps/command, apps/field, apps/roles) — and one of them drifted (see BUILD.md
 §5). This script replaces all of them with a single generated file, produced by
 introspecting the actual pydantic models and StrEnums in `contracts`.
 
+It writes the *same* file into every app in `APPS`. apps/mobile is a second
+client of the same API, so it gets the same generated types rather than a
+hand-written mirror — the drift that caused the original bug does not care
+which folder the fourth copy lives in.
+
 Run:  .venv/bin/python scripts/gen_frontend_types.py
-It is deterministic; CI can diff the output against the committed file.
+It is deterministic; CI can diff the output against the committed files.
 """
 
 from __future__ import annotations
@@ -22,7 +27,12 @@ import contracts
 from contracts import enums as contract_enums
 from pydantic import BaseModel
 
-OUT = Path(__file__).resolve().parent.parent / "apps/web/src/lib/types.ts"
+ROOT = Path(__file__).resolve().parent.parent
+
+#: Every frontend that consumes the contracts. Adding one here is all it takes
+#: to keep it in sync — there is deliberately no way to generate for one app
+#: and not the others.
+APPS = ("apps/web", "apps/mobile")
 
 # contracts names that collide with DOM/global names in TS land
 RENAME = {"Event": "UTEvent", "Route": "UTRoute"}
@@ -178,9 +188,6 @@ export interface PanelProps {
 """
 
 
-CITY_REF_OUT = OUT.parent / "cityRef.ts"
-
-
 def write_city_ref() -> None:
     """Emit the handful of seeded-network facts the UI would otherwise hardcode.
 
@@ -226,8 +233,11 @@ export const DEFECT_HOTSPOT_COUNT = {len(citydata.DEFECT_HOTSPOTS)};
 /** the speed limit inside a school zone, km/h — M3's pedestrian mock uses it */
 export const SCHOOL_ZONE_SPEED_LIMIT_KMPH = 25;
 """
-    CITY_REF_OUT.write_text(body)
-    print(f"wrote {CITY_REF_OUT.relative_to(Path.cwd())}")
+    for app in APPS:
+        out = ROOT / app / "src/lib/cityRef.ts"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(body)
+        print(f"wrote {out.relative_to(ROOT)}")
 
 
 def main() -> None:
@@ -243,9 +253,14 @@ def main() -> None:
     parts.append(class_list("FUSABLE_CLASSES", contract_enums.FUSABLE_CLASSES))
     parts.append(HAND_WRITTEN)
     parts += [emit_model(m) for m in MODELS]
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("\n".join(parts))
-    print(f"wrote {OUT.relative_to(Path.cwd())}")
+    body = "\n".join(parts)
+
+    for app in APPS:
+        out = ROOT / app / "src/lib/types.ts"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(body)
+        print(f"wrote {out.relative_to(ROOT)}")
+
     write_city_ref()
 
 

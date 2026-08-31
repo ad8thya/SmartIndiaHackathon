@@ -5,7 +5,8 @@
 #      → http://localhost:8000
 #
 #  Differences from docker-compose.yml (the dev one):
-#    · the api image also contains the built UI, so there is no vite anywhere
+#    · the api image also contains BOTH built UIs — the console at / and the
+#      mobile app at /m — so there is no vite anywhere and no second port
 #    · migrations and the seed run once, in their own short-lived services,
 #      before the api is allowed to start
 #    · the replay simulator runs as its own container, because you cannot
@@ -82,6 +83,9 @@ services:
     restart: "no"
 
   # ── the one container anyone talks to ──────────────────────────────────────
+  # Serves the API, the console at /, and the mobile app at /m. The mobile
+  # build's asset prefix is baked in by the Dockerfile (VITE_BASE=/m/), so it
+  # is not configurable here — see infra/Dockerfile stage 2.
   api:
     build:
       context: .

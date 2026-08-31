@@ -46,11 +46,20 @@ run() { # run <colour> <label> <cmd...>
   PIDS+=($!)
 }
 
-# ── 1. the built frontend ────────────────────────────────────────────────────
+# ── 1. the built frontends ───────────────────────────────────────────────────
+# The mobile app is built with VITE_BASE=/m/ to match where spa.py mounts it.
+# Getting this wrong is silent: the page loads and every asset 404s.
 if [ ! -f apps/web/dist/index.html ] || [ -n "${REBUILD:-}" ]; then
-  echo "  building the frontend (once — this is not a dev server)…"
+  echo "  building the console (once — this is not a dev server)…"
   npm --prefix apps/web run build --silent || {
-    echo "  ✗ frontend build failed. Run 'make setup' first."; exit 1;
+    echo "  ✗ console build failed. Run 'make setup' first."; exit 1;
+  }
+fi
+
+if [ ! -f apps/mobile/dist/index.html ] || [ -n "${REBUILD:-}" ]; then
+  echo "  building the mobile app…"
+  VITE_BASE=/m/ npm --prefix apps/mobile run build --silent || {
+    echo "  ✗ mobile build failed. Run 'make setup' first."; exit 1;
   }
 fi
 
@@ -58,6 +67,11 @@ fi
 if [ -n "$(find apps/web/src apps/web/index.html -newer apps/web/dist/index.html 2>/dev/null | head -1)" ]; then
   echo "  ⚠ apps/web/dist is older than your sources — rebuilding"
   npm --prefix apps/web run build --silent
+fi
+
+if [ -n "$(find apps/mobile/src apps/mobile/index.html -newer apps/mobile/dist/index.html 2>/dev/null | head -1)" ]; then
+  echo "  ⚠ apps/mobile/dist is older than your sources — rebuilding"
+  VITE_BASE=/m/ npm --prefix apps/mobile run build --silent
 fi
 
 # ── 2. offline asset check, before anyone is watching ────────────────────────
@@ -104,10 +118,11 @@ echo ""
 echo "  ┌──────────────────────────────────────────────────────────┐"
 echo "  │  URBAN TWIN — demo mode (offline, one port)              │"
 echo "  │                                                          │"
-printf "  │    everything  →  http://localhost:%-22s│\n" "$PORT"
+printf "  │    console     →  http://localhost:%-22s│\n" "$PORT"
+printf "  │    mobile app  →  http://localhost:%s/m%-18s│\n" "$PORT" ""
 printf "  │    api docs    →  http://localhost:%s/docs%-15s│\n" "$PORT" ""
 if [ -n "$LAN_IP" ]; then
-printf "  │    on a phone  →  http://%s:%-24s│\n" "$LAN_IP" "$PORT"
+printf "  │    on a phone  →  http://%s:%s/m%-19s│\n" "$LAN_IP" "$PORT" ""
 fi
 echo "  │                                                          │"
 echo "  │  no vite, no CDN, no tile server. Safe to unplug.        │"
@@ -121,8 +136,8 @@ echo ""
 # and a leading VAR=value is only an assignment when a *shell* parses the line.
 # Passed as argv[0] it is just a command name, and the api never starts —
 # which is precisely the kind of failure you find on stage.
-run 36 api env WEB_DIST=apps/web/dist "$PY" -m uvicorn services.cloud.api.main:app \
-  --host 0.0.0.0 --port "$PORT"
+run 36 api env WEB_DIST=apps/web/dist MOBILE_DIST=apps/mobile/dist \
+  "$PY" -m uvicorn services.cloud.api.main:app --host 0.0.0.0 --port "$PORT"
 
 # wait for /health rather than sleeping a guessed number of seconds
 for _ in $(seq 1 40); do
