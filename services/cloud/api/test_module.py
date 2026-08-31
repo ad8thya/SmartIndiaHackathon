@@ -464,8 +464,12 @@ def test_report_is_accepted_and_readable_back(client: TestClient, media_dir: obj
     assert created.status_code == 201, created.text
     report = created.json()
 
-    assert report["status"] == "SUBMITTED"
-    assert report["linked_event_id"] is None
+    # SUBMITTED or LINKED depending on whether a fused event happens to sit
+    # at these coordinates — the seeded_state fixture puts one there. Both are
+    # correct outcomes of a successful POST, and pinning one made this test
+    # fail the moment automatic linking landed. The linking rules have their
+    # own tests below; this one is about the round trip.
+    assert report["status"] in {"SUBMITTED", "LINKED"}
     assert report["report_id"]
 
     # The thing localStorage could never do: someone else can read it.

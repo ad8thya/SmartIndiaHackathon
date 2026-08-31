@@ -36,6 +36,28 @@ class ApiSettings(BaseSettings):
     #: build is produced with `VITE_BASE=/m/` to match.
     MOBILE_DIST: str | None = None
 
+    # ── repair verification ─────────────────────────────────────────────
+    #: Clean passes needed before a repair is auto-verified.
+    REPAIR_VERIFY_PASSES: int = 3
+    #: ...from at least this many DISTINCT buses. Corroboration to appear,
+    #: corroboration to disappear — see services/cloud/repair_verification.
+    #: One bus reporting "clean" repeatedly may simply have a covered lens,
+    #: which is a real state this system already models.
+    REPAIR_VERIFY_MIN_BUSES: int = 2
+    #: How close a bus must come to count as having driven past the defect.
+    #: Wider than the report-link radius: this is "did a camera get a look at
+    #: it", not "is this the same pothole".
+    REPAIR_VERIFY_RADIUS_M: float = 40.0
+    #: What one clean pass does to confidence while below threshold. Mirrors
+    #: fusion's noisy-OR in the other direction: evidence of absence lowers
+    #: the system's belief rather than closing the case outright.
+    REPAIR_VERIFY_DECAY: float = 0.7
+    #: No bus has driven this road in this long → the crew is told it is
+    #: stalled rather than left watching a counter that is not moving.
+    REPAIR_VERIFY_STALL_HOURS: float = 6.0
+    #: How often the verifier looks at where the buses are.
+    REPAIR_VERIFY_INTERVAL_S: float = 5.0
+
     #: How close a citizen report must be to an existing fused Event before
     #: the two are treated as the same real-world thing.
     #:

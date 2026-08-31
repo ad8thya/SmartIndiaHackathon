@@ -7,6 +7,7 @@
  */
 
 import type { PublicEvent } from './useEvents';
+import type { VerificationStatus } from './verification';
 import type {
   AnalyticsSummary,
   BusPosition,
@@ -216,6 +217,12 @@ export const api = {
     }),
 
   // ── camera health ─────────────────────────────────────────────────────────
+  /**
+   * How far the fleet has got confirming each claimed repair. A read of a
+   * background process — nothing here starts or drives verification.
+   */
+  verification: () => request<VerificationStatus[]>('/api/verification'),
+
   /** Four rows per bus. `derived` says whether the state was sensed or inferred. */
   busCameras: (busId: string) => request<CameraStatus[]>(`/api/fleet/${busId}/cameras`),
 };

@@ -261,7 +261,36 @@ async def get_event(event_id: UUID, state: State) -> Event:
     summary="Advance an event through the workflow",
 )
 async def patch_status(event_id: UUID, patch: StatusPatch, state: State, broadcaster: Bus) -> Event:
-    """The one write path a human drives. Everything else is machine-generated."""
+    """The write path a human drives. See `apply_status_change` for the shared
+    core — the repair verifier drives the same one."""
+    return await apply_status_change(
+        event_id=event_id,
+        status=patch.status,
+        state=state,
+        broadcaster=broadcaster,
+        assigned_team=patch.assigned_team,
+        notes=patch.notes,
+    )
+
+
+async def apply_status_change(
+    *,
+    event_id: UUID,
+    status: WorkflowStatus,
+    state: LiveState,
+    broadcaster: object,
+    assigned_team: str | None = None,
+    notes: str | None = None,
+) -> Event:
+    """Move an event along the workflow ladder, from wherever the decision came.
+
+    ONE path for every status change, deliberately. An operator's PATCH and the
+    repair verifier's auto-close go through here identically, which is what
+    guarantees the auto-close also broadcasts, also writes a work-order note,
+    and — the part that would silently rot otherwise — also advances the
+    citizen report linked to this event. A second write path would eventually
+    forget one of those three.
+    """
     event = await get_event(event_id, state)
 
     # last_seen deliberately untouched: it means "when the fleet last SAW this
@@ -271,8 +300,8 @@ async def patch_status(event_id: UUID, patch: StatusPatch, state: State, broadca
     # and the Event validator rejected it. The row's updated_at records the write.
     updated = event.model_copy(
         update={
-            "status": patch.status,
-            "assigned_team": patch.assigned_team or event.assigned_team,
+            "status": status,
+            "assigned_team": assigned_team or event.assigned_team,
         }
     )
     state.replace_event(updated)
@@ -281,16 +310,22 @@ async def patch_status(event_id: UUID, patch: StatusPatch, state: State, broadca
         async with session_scope() as session:
             row = await session.get(EventRow, event_id)
             if row is not None:
-                row.status = str(patch.status)
-                if patch.assigned_team:
-                    row.assigned_team = patch.assigned_team
-                if patch.notes:
-                    await _append_work_order_note(session, row, patch)
+                row.status = str(status)
+                if assigned_team:
+                    row.assigned_team = assigned_team
+                if notes:
+                    await _append_work_order_note(
+                        session,
+                        row,
+                        StatusPatch(status=status, assigned_team=assigned_team, notes=notes),
+                    )
     except Exception as exc:
         # the in-memory update already succeeded; the UI stays correct
         log.warning("could not persist status change for %s: %s", event_id, exc)
 
-    broadcaster.publish(WSMessageType.EVENT_UPDATED, updated.model_dump(mode="json"))
+    broadcaster.publish(  # type: ignore[attr-defined]
+        WSMessageType.EVENT_UPDATED, updated.model_dump(mode="json")
+    )
 
     # The citizen half of the loop. A report linked to this event follows it up
     # the ladder, so somebody who photographed a pothole watches their own

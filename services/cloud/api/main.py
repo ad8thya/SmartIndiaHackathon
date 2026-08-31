@@ -27,6 +27,7 @@ from .hub import Repeater, broadcaster, state
 from .mqtt_bridge import MqttBridge
 from .routers import ALL_ROUTERS
 from .spa import find_dist, mount_map, mount_mobile, mount_spa
+from .verification_loop import VerificationLoop
 
 settings = get_api_settings()
 logging.basicConfig(
@@ -67,10 +68,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     tick_task = Repeater(settings.WS_TICK_SECONDS, heartbeat, "tick")
     tick_task.start()
 
+    # Closing the loop. Reads where the buses are and corroborates repairs the
+    # crews have claimed — no HTTP surface, because a re-scan is something the
+    # world does as buses drive, not something a client asks for.
+    verification = VerificationLoop(settings, state, broadcaster)
+    verification_task = Repeater(
+        settings.REPAIR_VERIFY_INTERVAL_S, verification.tick, "repair-verification"
+    )
+    verification_task.start()
+    app.state.verification = verification
+
     try:
         yield
     finally:
         log.info("URBAN TWIN api shutting down")
+        await verification_task.stop()
         await tick_task.stop()
         await fusion_task.stop()
         if mqtt_bridge is not None:

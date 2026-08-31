@@ -13,6 +13,7 @@ from . import (
     reports,
     roads,
     routes,
+    verification,
     whatif,
     ws,
 )
@@ -27,6 +28,7 @@ ALL_ROUTERS = (
     incidents.router,
     observations.router,
     reports.router,
+    verification.router,
     intelligence.router,
     analytics.router,
     ws.router,
