@@ -357,8 +357,14 @@ endpoints · WebSocket accept · frontend deps installed · buildings cached.
 
 ### `make mine`
 
-Runs **only your module's tests**, detecting who you are from your git branch
-(`m3-fusion` → `m3`), or from `MEMBER=m3`.
+Runs **only your module's tests**. Everyone works on `main`, so the branch name
+cannot say who you are — write it down once in `.member` (gitignored):
+
+```bash
+echo m3 > .member
+```
+
+or pass it per command: `MEMBER=m3 make mine`. With neither, it runs everything.
 
 | Member | Runs |
 |---|---|
@@ -389,10 +395,11 @@ This repo was produced by four prompt passes: **scaffold → verify → fix → 
 
 | Phase | What happened |
 |---|---|
-| **Scaffold** | Whole repo generated in one pass: contracts, six modules with mocks and stubs, API, DB, both frontends, tooling, docs |
+| **Scaffold** | Whole repo generated in one pass: contracts, six modules with mocks and stubs, API, DB, the frontends (since merged into `apps/web`), tooling, docs |
 | **Verify** | 34-point audit against live infrastructure — real containers, PostGIS queries, `mosquitto_sub` roundtrips, headless Chrome over CDP for the UI. Report produced, no fixes applied |
 | **Fix** | 12 fixes applied P0→P4, each re-verified. 2 items declined with reasons. 7 findings deferred and annotated in code |
 | **Ship** | History rewritten into 8 logical commits, 6 member branches created, pushed |
+| **Consolidate** | 31 Aug 2026 — the three frontends merged into `apps/web`, `m4-incidents` merged back into `main`, and all six member branches deleted. `main` is now the only branch |
 
 ```
 f02e22b  chore: project scaffold, docker compose, tooling         13 files,   +758
@@ -405,8 +412,10 @@ d9db90f  feat(api): rest endpoints, websocket, mqtt ingest        29 files,  +31
 cdf0c40  docs: readme, contributing, per-member checklists        12 files,  +1418
 ```
 
-Branches `main`, `m1-defects`, `m2-traffic`, `m3-fusion`, `m4-incidents`, `m5-platform`,
-`m6-frontend` all start from `cdf0c40`.
+Those eight commits all start from `cdf0c40`. The six member branches that once
+branched from it (`m1-defects` … `m6-frontend`) were merged into `main` and
+deleted on 31 Aug 2026 — every one of their commits is reachable from `main`.
+See **CONTRIBUTING.md**: one branch, everyone on it.
 
 ---
 

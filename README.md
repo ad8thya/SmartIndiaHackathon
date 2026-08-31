@@ -196,10 +196,16 @@ table above — is a one-line change inside one folder.
 ## 3 · Quickstart
 
 ```bash
+git clone https://github.com/ad8thya/SmartIndiaHackathon.git
+cd SmartIndiaHackathon
 cp .env.example .env
 make setup        # venv + python deps + npm install
 make dev          # docker infra, migrations, seed, api, replay, the UI
 ```
+
+There is **one branch, `main`.** No checkout step, nothing to pick. Everyone
+commits to `main` and pulls with `--rebase` — see **CONTRIBUTING.md** for the
+daily loop and the before-you-push checklist.
 
 **One app, one port.** Everything is `http://localhost:5173`:
 
@@ -252,6 +258,7 @@ Sanity check any time: `make smoke`
 ║                                                                    ║
 ║   5.  Pull from main every morning BEFORE you write code.          ║
 ║       `git pull --rebase origin main` — first thing, every day.    ║
+║       One shared branch. Never force-push it.                      ║
 ║                                                                    ║
 ╚════════════════════════════════════════════════════════════════════╝
 ```
@@ -789,7 +796,7 @@ make types       # regenerate the frontend contract types from packages/contract
 
 make smoke       # green/red checklist of every moving part
 make test        # everything, python + frontend
-make mine        # ONLY your module's tests (reads your git branch)
+make mine        # ONLY your module's tests (reads .member, or MEMBER=m3)
 make fmt         # ruff format + autofix
 make typecheck   # mypy strict on the frozen shared layer
 ```

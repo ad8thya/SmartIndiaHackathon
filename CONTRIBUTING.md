@@ -1,85 +1,125 @@
 # Contributing
 
-Seven days, six people, one repo. These rules exist so that nobody spends an
-afternoon resolving a merge conflict instead of building.
+Seven days, six people, one repo, **one branch**. These rules exist so that
+nobody spends an afternoon resolving a merge conflict instead of building.
 
 ---
 
-## Branches
+## Everyone works on `main`
 
-One long-lived branch per person. You work on yours all week.
+There are no member branches. There is `main`, and that is all.
 
-| branch | owner | scope |
-|---|---|---|
-| `m1-defects` | M1 | `services/edge/defects/**`, `panels/DefectsPanel.tsx` |
-| `m2-traffic` | M2 | `services/cloud/intelligence/traffic_analytics/**`, `services/cloud/intelligence/whatif/**`, `panels/TrafficPanel.tsx`, `panels/WhatIfPanel.tsx` |
-| `m3-fusion` | M3 | `services/edge/pedestrian/**`, `services/cloud/consensus/**`, `panels/RiskPanel.tsx` |
-| `m4-incidents` | M4 | `services/edge/incidents/**`, `panels/IncidentsPanel.tsx` |
-| `m5-platform` | M5 | `services/cloud/api/**`, `services/tools/replay/**`, `packages/db/**`, `scripts/**` |
-| `m6-frontend` | M6 | `apps/web/src/**` (except `panels/`) — includes `field/` and `roles/` |
+We tried one long-lived branch per person. What actually happened: five
+branches sat untouched at the same commit for days while the real work piled up
+on one, and `main` quietly diverged from all of them. By the time anyone
+looked, two people had rewritten the same two files in different directions and
+the PR would not merge. The branches did not prevent that collision — they hid
+it until it was expensive.
 
-`main` is protected. **No direct pushes, by anyone, including whoever set the
-repo up.**
+Small commits straight onto `main`, pushed often, collide less. You find out
+about a conflict in the thirty seconds after someone else's push, not on day
+six.
+
+The protection that branches used to give you is now three things: **the
+ownership map below**, **pulling with `--rebase` before you start**, and
+**pushing often enough that your work is never a surprise**.
+
+---
+
+## Who owns what
+
+This is the useful half of the old branch system, and it still applies. Same
+boundaries, no branches.
+
+| Member | Owns |
+|---|---|
+| M1 | `services/edge/defects/**`, `apps/web/src/panels/DefectsPanel.tsx` |
+| M2 | `services/cloud/intelligence/traffic_analytics/**`, `services/cloud/intelligence/whatif/**`, `services/cloud/intelligence/recommend/**`, `apps/web/src/panels/TrafficPanel.tsx`, `apps/web/src/panels/WhatIfPanel.tsx` |
+| M3 | `services/edge/pedestrian/**`, `services/cloud/consensus/**`, `services/cloud/intelligence/urban_risk/**`, `apps/web/src/panels/RiskPanel.tsx` |
+| M4 | `services/edge/incidents/**`, `apps/web/src/panels/IncidentsPanel.tsx` |
+| M5 | `services/cloud/api/**`, `services/tools/replay/**`, `packages/db/**`, `scripts/**` |
+| M6 | `apps/web/src/**` (except `panels/`) — the shell, map, layout, field and role screens |
+
+`packages/contracts` is owned by everyone and changed by nobody without an ACK.
+See below.
+
+**Stage what you own, not what is dirty.** `git commit -a` is how you commit
+someone else's half-finished file. Name your paths:
+
+```bash
+git add services/cloud/consensus            # not  git add -A
+```
 
 ---
 
 ## The daily loop
 
 ```bash
-# ── every morning, BEFORE you write a line of code ──
-git checkout main
-git pull origin main
-git checkout m3-fusion
-git rebase main
+# ── every morning, and after any long break ──
+git pull --rebase origin main
 
 # ── during the day ──
-MEMBER=m3 make mine        # your tests, fast
-git add services/cloud/consensus    # stage only what you own
+MEMBER=m3 make mine                          # your tests, fast
+git add services/cloud/consensus             # stage only what you own
 git commit -m "fusion: DBSCAN clustering with metre-space projection"
-
-# ── before you push ──
-make test                  # everything, not just yours
-make fmt
-git push origin m3-fusion
+git pull --rebase origin main                # someone else pushed while you worked
+git push origin main
 ```
 
-Rebase rather than merge. Six people merging main into six branches produces a
-commit graph nobody can read by Wednesday.
+Push **several times a day**, not once. On one shared branch, an unpushed
+commit is a commit nobody can build on and everybody can collide with.
+
+### `--rebase`, always
+
+Configure it once and stop thinking about it:
+
+```bash
+git config pull.rebase true
+```
+
+Without it, six people pulling produces a merge commit per pull and a graph
+nobody can read by Wednesday.
+
+### Never force-push
+
+`git push --force` on a shared `main` deletes other people's commits. There is
+no undo that does not involve someone reading a reflog at 2am.
+
+If you need to undo something already pushed, add a commit that reverses it:
+
+```bash
+git revert <sha>
+```
+
+If you rebased and now `push` is rejected, **do not** reach for `--force`. Run
+`git pull --rebase origin main` and push again. If it is still rejected, stop
+and ask — that is a genuinely confusing state and it is faster to look at it
+together than to guess.
 
 ---
 
-## Pull requests
+## Before you push
 
-Open a PR to `main` **at least once a day**, even for work in progress. A branch
-that has not touched main in three days is a branch that will not merge.
+Every time. It takes under a minute and it is the whole reason `main` stays
+green for five other people.
 
-A PR needs:
-
-- [ ] `make mine` green
-- [ ] `make test` green — all six modules, not just yours
-- [ ] `make fmt` run
-- [ ] only files you own in the diff
-- [ ] a title that says what changed, not "updates"
-
-One approval from anyone merges it. Do not wait for a quorum; you do not have
-the time.
-
-### PR description template
-
-```markdown
-## What
-One sentence.
-
-## Files touched
-- services/cloud/consensus/impl.py
-- services/cloud/consensus/test_module.py
-
-## Flag state
-USE_REAL_FUSION: still false / now true
-
-## Anyone else affected?
-No / Yes — <who> and <why>, and I have told them.
+```bash
+make test          # everything, python + frontend — not just your module
+make lint          # ruff, and it must exit 0
+git pull --rebase origin main
 ```
+
+Checklist:
+
+- [ ] `make test` green — all six modules, not just yours
+- [ ] `make lint` green (`make fmt` first if it is not)
+- [ ] `git pull --rebase origin main` done, and nothing broke after it
+- [ ] only files you own in `git diff --stat`
+- [ ] a commit message that says what changed, not "updates"
+
+If `make test` is red and it is not your code that broke it, say so in the team
+channel before you push on top of it. Two people debugging the same red suite
+in silence is the worst use of an afternoon.
 
 ---
 
@@ -94,6 +134,9 @@ The exceptions, in order of preference:
 2. **You need a new API endpoint.** That is M5's. Ask M5.
 3. **You need a contract change.** See below.
 
+On one branch this matters *more* than it did, not less. There is no PR review
+standing between your commit and everyone else's next pull.
+
 ---
 
 ## Changing `packages/contracts`
@@ -107,7 +150,8 @@ It is frozen after Day 1. When you genuinely need a change:
    ```bash
    CONTRACTS_OK=1 git commit -m "contracts: add optional Event.reported_by field"
    ```
-5. Tell everyone to pull immediately. A stale contract is worse than a wrong one.
+5. Push immediately, and tell everyone to pull. A stale contract is worse than
+   a wrong one — and on a shared branch, "stale" now means everyone.
 
 Additive changes — a new optional field, a new enum member — are cheap and
 usually fine. **Renames and removals break five people at once.** If you find
@@ -128,24 +172,30 @@ contracts: add optional Event.reported_by  [ACKED: m1 m3 m5]
 ```
 
 Not `fix`, not `wip`, not `updates`. On day six you will be reading this log to
-find out when something broke.
+find out when something broke — and now it is the only log there is.
 
 ---
 
 ## Merge conflicts
 
-If you get one, something went wrong upstream of the conflict:
+On one branch you will hit these during `git pull --rebase`, not at PR time.
+The diagnosis is the same:
 
-- **In your own module** → you did not rebase this morning. Rebase and move on.
+- **In your own module** → you did not pull this morning. Resolve, `git rebase
+  --continue`, move on.
 - **In `packages/contracts`** → two people changed the frozen layer. Stop, get
   everyone in a room, resolve it as a team.
-- **In someone else's file** → you edited a file you do not own. Revert your
-  side and ask the owner.
+- **In someone else's file** → you edited a file you do not own. Take their
+  side (`git checkout --theirs <file>`), drop your change, and ask the owner.
 - **In `.env`** → `.env` is gitignored. If you are seeing this, someone
   committed it. Remove it from tracking immediately:
   ```bash
   git rm --cached .env
   ```
+
+If a rebase goes somewhere you do not understand, `git rebase --abort` puts you
+back exactly where you started. It is always safe. Use it early rather than
+pushing a mess.
 
 ---
 
@@ -154,7 +204,7 @@ If you get one, something went wrong upstream of the conflict:
 Python is enforced by tooling — run `make fmt` and stop thinking about it.
 Ruff at 100 columns, mypy strict on `packages/`.
 
-TypeScript: `npm run typecheck` in each app. Strict mode, no `any` without a
+TypeScript: `npm run typecheck` in `apps/web`. Strict mode, no `any` without a
 comment saying why.
 
 Two conventions the tools cannot enforce:
@@ -174,7 +224,7 @@ Two conventions the tools cannot enforce:
 ```
 
 Runs ruff, mypy on the shared layer, and the contracts guard. It takes two
-seconds and saves a broken main.
+seconds and saves a broken `main` — which is now everybody's working copy.
 
 ---
 

@@ -17,10 +17,11 @@ MYPY    := $(VENV)/bin/mypy
 ALEMBIC := $(VENV)/bin/alembic
 COMPOSE := docker compose
 
-# `make mine` figures out who you are from your git branch (m1-defects → m1),
-# or from MEMBER=m3 on the command line.
-BRANCH  := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
-MEMBER  ?= $(shell echo "$(BRANCH)" | grep -oE '^m[1-6]' || echo all)
+# `make mine` needs to know who you are. Everyone works on `main` now, so the
+# branch name no longer says it. Write it down once, in a file git ignores:
+#     echo m3 > .member
+# or pass it per command:  MEMBER=m3 make mine
+MEMBER  ?= $(shell cat .member 2>/dev/null | tr -d '[:space:]' | grep -oE '^m[1-6]' || echo all)
 
 help: ## show this help
 	grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -93,7 +94,7 @@ test-py: ## all python tests
 test-js: ## frontend unit tests
 	cd apps/web && npm run test -- --run
 
-mine: ## run ONLY your module's tests (uses your git branch, or MEMBER=m3)
+mine: ## run ONLY your module's tests (reads .member, or MEMBER=m3)
 	bash scripts/mine.sh $(MEMBER)
 
 fmt: ## format + autofix

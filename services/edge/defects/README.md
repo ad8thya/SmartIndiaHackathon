@@ -47,7 +47,7 @@ for obs in get_defect_detector().detect(None, meta):
 "
 ```
 
-Tests: `make mine` (on branch `m1-defects`) or `MEMBER=m1 make mine`.
+Tests: `MEMBER=m1 make mine` (or `echo m1 > .member` once, then `make mine`).
 
 ## Going real
 

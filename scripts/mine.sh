@@ -26,7 +26,8 @@ case "$MEMBER" in
       PATHS="packages/contracts"
       FILES="apps/web/src (shell, map, layout, field + roles screens)" ;;
   all)
-      echo "  no member detected (branch is not m1-… and MEMBER is unset) — running everything"
+      echo "  no member set — running everything."
+      echo "  to run only your module:   echo m3 > .member    (or  MEMBER=m3 make mine)"
       exec $PYTEST ;;
   *)  echo "  unknown member '$MEMBER'. Use MEMBER=m1 … m6"; exit 1 ;;
 esac
