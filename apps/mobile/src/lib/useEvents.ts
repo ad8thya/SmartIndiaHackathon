@@ -59,6 +59,11 @@ export function useEvents({ publicOnly = false }: { publicOnly?: boolean } = {})
       setEvents(fetched);
       setError(null);
     } catch (cause) {
+      // Empty, not null. `null` means "still loading", and leaving it null on
+      // failure leaves every consumer showing a skeleton forever — which is
+      // the worst of the three states: it says "nearly there" indefinitely
+      // while the phone has no signal at all.
+      setEvents([]);
       setError(cause instanceof Error ? cause.message : 'could not load');
     }
   }, [publicOnly]);

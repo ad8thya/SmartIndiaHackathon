@@ -9,9 +9,12 @@
 import type {
   AnalyticsSummary,
   BusPosition,
+  CitizenReport,
   GeoJsonFeatureCollection,
   HealthStatus,
   IncidentReport,
+  ReportCategory,
+  ReportStatus,
   RoadCondition,
   UTEvent,
   UTRoute,
@@ -120,4 +123,37 @@ export const api = {
     request<IncidentReport[]>(`/api/incidents${query(params)}`),
 
   summary: () => request<AnalyticsSummary>('/api/analytics/summary'),
+
+  // ── citizen reports ───────────────────────────────────────────────────────
+  // The photo travels as a base64 data URI in the POST body and is decoded to
+  // a file server-side; what comes back in `photo_uri` is a path. Nothing here
+  // ever holds a data URI after the request completes — see
+  // services/cloud/api/routers/reports.py.
+  createReport: (body: {
+    category: ReportCategory;
+    description: string;
+    lat: number;
+    lon: number;
+    address?: string;
+    reporter_name?: string;
+    ward?: string;
+    photo?: string;
+  }) =>
+    request<CitizenReport>('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  reports: (
+    params: {
+      [key: string]: unknown;
+      status?: ReportStatus[];
+      category?: ReportCategory[];
+      ward?: string;
+      reporter_name?: string;
+      limit?: number;
+    } = {},
+  ) => request<CitizenReport[]>(`/api/reports${query(params)}`),
+
+  report: (reportId: string) => request<CitizenReport>(`/api/reports/${reportId}`),
 };

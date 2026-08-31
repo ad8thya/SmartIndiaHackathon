@@ -8,7 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildMapStyle, INITIAL_VIEW } from '../lib/mapStyle';
+import { buildMapStyle } from '../lib/mapStyle';
+import { INITIAL_VIEW } from '../lib/mapView';
 import { isPublic, PUBLIC_STATUSES, STATUS_HEX } from '../lib/display';
 import { toPublicEvent } from '../lib/useEvents';
 import { WORKFLOW_ORDER } from '../lib/types';

@@ -205,6 +205,12 @@ def write_city_ref() -> None:
         f" radiusM: {z.radius_m}, activeHours: {z.active_hours!r} }}".replace("'", '"')
         for z in citydata.SCHOOL_ZONES
     )
+    segment_rows = "".join(
+        f"  {{ road_id: {seg.road_id!r}, name: {seg.name!r}, route_id: {seg.route_id!r}, "
+        f"lat: {seg.center[1]}, lon: {seg.center[0]} }},\n".replace("'", '"')
+        for seg in citydata.SEGMENTS
+    )
+
     body = f"""\
 /**
  * GENERATED from packages/citydata — do not edit by hand.
@@ -235,6 +241,26 @@ export const BUS_COUNT = {len(citydata.BUSES)};
 export const DEFECT_HOTSPOT_COUNT = {len(citydata.DEFECT_HOTSPOTS)};
 /** the speed limit inside a school zone, km/h — M3's pedestrian mock uses it */
 export const SCHOOL_ZONE_SPEED_LIMIT_KMPH = 25;
+
+export interface SegmentRef {{
+  road_id: string;
+  name: string;
+  route_id: string;
+  lat: number;
+  lon: number;
+}}
+
+/**
+ * Every seeded road segment with its name and centre.
+ *
+ * This is what lets apps/mobile reverse-geocode a citizen report to a street
+ * name with the network off. A hosted geocoder would be one more thing to fail
+ * on stage, and `make demo` promises the wifi can be unplugged — so the phone
+ * names the nearest seeded segment instead, and says "nearest known road"
+ * rather than claiming to be a postal address.
+ */
+export const SEGMENTS: readonly SegmentRef[] = [
+{segment_rows}];
 """
     for app in APPS:
         out = ROOT / app / "src/lib/cityRef.ts"

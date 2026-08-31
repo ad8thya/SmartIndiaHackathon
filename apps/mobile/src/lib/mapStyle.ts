@@ -60,12 +60,3 @@ export function buildMapStyle(): StyleSpecification {
   } as StyleSpecification;
 }
 
-/** Chennai Central. Same centre the console uses, flat — a phone map is a map. */
-export const INITIAL_VIEW = {
-  lon: 80.2707,
-  lat: 13.0827,
-  zoom: 12.4,
-};
-
-/** How close "recentre on me" gets. Street level, not building level. */
-export const LOCATE_ZOOM = 15.5;

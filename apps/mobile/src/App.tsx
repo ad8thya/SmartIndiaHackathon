@@ -13,29 +13,32 @@
  * typo'd path under /citizen must not fall through to the global catch-all and
  * lose the tab bar.
  *
- * T4 replaces the `Placeholder` bodies with the real screens. The routes, the
- * shell and the guard do not change when it does.
+ * Every route below is a real screen. There are no placeholders left — the
+ * stand-in component T2 used was deleted when the last one was replaced, which
+ * is what its own docstring said to do.
  */
 
 import { Navigate, Route, Routes } from 'react-router-dom';
-import {
-  Ambulance,
-  Bell,
-  Camera,
-  ClipboardList,
-  FileText,
-  Map as MapIcon,
-  Navigation,
-  Route as RouteIcon,
-  ScanLine,
-  SquarePen,
-} from 'lucide-react';
 import { AppShell } from './components/AppShell';
 import { RequireRole } from './components/RequireRole';
 import { LoginScreen } from './screens/LoginScreen';
 import { NotAvailableScreen } from './screens/NotAvailableScreen';
-import { Placeholder } from './screens/Placeholder';
+import { AlertsScreen } from './screens/citizen/AlertsScreen';
+import { CitizenHomeScreen } from './screens/citizen/HomeScreen';
+import { MyReportsScreen } from './screens/citizen/MyReportsScreen';
+import { ReportScreen } from './screens/citizen/ReportScreen';
+import { ReportSentScreen } from './screens/citizen/ReportSentScreen';
 import { RoadConditionsScreen } from './screens/citizen/RoadConditionsScreen';
+import { CrewMapScreen } from './screens/crew/CrewMapScreen';
+import { OrderScreen } from './screens/crew/OrderScreen';
+import { QueueScreen } from './screens/crew/QueueScreen';
+import { VerificationScreen } from './screens/crew/VerificationScreen';
+import { CamerasScreen } from './screens/bus/CamerasScreen';
+import { MyBusScreen } from './screens/bus/MyBusScreen';
+import { RouteScreen } from './screens/bus/RouteScreen';
+import { EmergencyAlertsScreen } from './screens/emergency/AlertsScreen';
+import { DispatchScreen } from './screens/emergency/DispatchScreen';
+import { LogScreen } from './screens/emergency/LogScreen';
 import { MOBILE_ROLES } from './roles/catalog';
 import { useSession } from './store/session';
 
@@ -71,56 +74,17 @@ export function App() {
           </RequireRole>
         }
       >
-        <Route
-          index
-          element={
-            <Placeholder
-              title="Citizen home"
-              body="The hero banner and the four big action cards land here in T4."
-              bullets={[
-                'Report an issue — camera, GPS and a category picker',
-                'Road conditions — confirmed hazards near you',
-                'My reports — what happened to what you sent',
-                'Alerts — notices for your ward',
-              ]}
-              action={{ to: '/citizen/report', label: 'Report an issue' }}
-            />
-          }
-        />
-        <Route
-          path="report"
-          element={
-            <Placeholder
-              icon={SquarePen}
-              title="Report an issue"
-              body="Photo capture, auto-filled location and a category picker. Built in T4 on the API added in T5."
-              bullets={[
-                'Take a photo with the phone camera',
-                'Location filled in from GPS, with an editable address',
-                'A description, then submit — and a report ID back',
-              ]}
-            />
-          }
-        />
-        <Route
-          path="reports"
-          element={
-            <Placeholder
-              icon={FileText}
-              title="My reports"
-              body="Everything you have sent, with its current status and a timeline."
-              action={{ to: '/citizen/report', label: 'Report an issue' }}
-            />
-          }
-        />
+        <Route index element={<CitizenHomeScreen />} />
+        <Route path="report" element={<ReportScreen />} />
+        {/* The success screen is a route, not a flag on the form: it has its
+            own URL so "Report another" is a navigation rather than a reset,
+            and swipe-back from it lands on the home screen instead of a
+            half-filled form the citizen already submitted. */}
+        <Route path="report/sent/:reportId" element={<ReportSentScreen />} />
+        <Route path="reports" element={<MyReportsScreen />} />
         {/* Full-bleed: the map owns the canvas, so no padding wrapper. */}
         <Route path="conditions" element={<RoadConditionsScreen />} />
-        <Route
-          path="alerts"
-          element={
-            <Placeholder icon={Bell} title="Alerts" body="Notices for your ward will appear here." />
-          }
-        />
+        <Route path="alerts" element={<AlertsScreen />} />
         <Route path="*" element={<CatchAll />} />
       </Route>
 
@@ -133,40 +97,13 @@ export function App() {
           </RequireRole>
         }
       >
-        <Route
-          index
-          element={
-            <Placeholder
-              icon={ClipboardList}
-              title="My queue"
-              body="Work orders assigned to your crew, each with its SLA countdown, distance and severity."
-              bullets={[
-                'Tap an order for evidence, IRC:82 severity and the recommended treatment',
-                'Start inspection → mark repaired, live on the console',
-              ]}
-            />
-          }
-        />
-        <Route
-          path="map"
-          element={
-            <Placeholder
-              icon={MapIcon}
-              title="Work order map"
-              body="Your assigned orders as pins on the offline basemap. Built in T3."
-            />
-          }
-        />
-        <Route
-          path="verification"
-          element={
-            <Placeholder
-              icon={ScanLine}
-              title="Awaiting verification"
-              body="Repairs you have closed that are waiting for a bus to re-scan the road and confirm them."
-            />
-          }
-        />
+        <Route index element={<QueueScreen />} />
+        {/* Detail is its own route rather than a sheet: a crew opens one order
+            and works from it, so it needs a URL, a back button and somewhere
+            to come back to after Navigate hands off to Maps. */}
+        <Route path="order/:eventId" element={<OrderScreen />} />
+        <Route path="map" element={<CrewMapScreen />} />
+        <Route path="verification" element={<VerificationScreen />} />
         <Route path="*" element={<CatchAll />} />
       </Route>
 
@@ -179,36 +116,9 @@ export function App() {
           </RequireRole>
         }
       >
-        <Route
-          index
-          element={
-            <Placeholder
-              icon={RouteIcon}
-              title="My bus"
-              body="One card: bus id, route, shift and status. This role stays small on purpose."
-            />
-          }
-        />
-        <Route
-          path="cameras"
-          element={
-            <Placeholder
-              icon={Camera}
-              title="Cameras"
-              body="Front, rear, left and right — online state and the time of the last frame."
-            />
-          }
-        />
-        <Route
-          path="route"
-          element={
-            <Placeholder
-              icon={MapIcon}
-              title="Today’s route"
-              body="Your route on the map, the stops ahead, and what your cameras contributed today."
-            />
-          }
-        />
+        <Route index element={<MyBusScreen />} />
+        <Route path="cameras" element={<CamerasScreen />} />
+        <Route path="route" element={<RouteScreen />} />
         <Route path="*" element={<CatchAll />} />
       </Route>
 
@@ -221,33 +131,9 @@ export function App() {
           </RequireRole>
         }
       >
-        <Route
-          index
-          element={
-            <Placeholder
-              icon={Ambulance}
-              title="Active alerts"
-              body="Large, sparse incident cards with a severity strip and time elapsed. Read under pressure, so bigger than anything else in the app."
-              bullets={['Accept an incident', 'Dispatch a unit and follow the route']}
-            />
-          }
-        />
-        <Route
-          path="dispatch"
-          element={
-            <Placeholder
-              icon={Navigation}
-              title="Dispatch"
-              body="Route to the scene and an ETA, once an incident is accepted."
-            />
-          }
-        />
-        <Route
-          path="log"
-          element={
-            <Placeholder icon={FileText} title="Log" body="Incidents you have already closed." />
-          }
-        />
+        <Route index element={<EmergencyAlertsScreen />} />
+        <Route path="dispatch" element={<DispatchScreen />} />
+        <Route path="log" element={<LogScreen />} />
         <Route path="*" element={<CatchAll />} />
       </Route>
 

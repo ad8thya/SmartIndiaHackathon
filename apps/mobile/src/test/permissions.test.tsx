@@ -89,7 +89,8 @@ describe('the permission boundary', () => {
 
   it('lets the role into its own routes', async () => {
     renderAt('/citizen/report');
-    expect(await screen.findByRole('heading', { name: /report an issue/i })).toBeInTheDocument();
+    // The real report form, not a placeholder — step 1 of the wizard.
+    expect(await screen.findByRole('heading', { name: /what is the problem/i })).toBeInTheDocument();
     expect(screen.queryByText(/not available for your role/i)).not.toBeInTheDocument();
   });
 });
@@ -104,8 +105,11 @@ describe('sign in', () => {
     await user.click(screen.getByRole('button', { name: /road maintenance/i }));
     await user.click(screen.getByRole('button', { name: /continue/i }));
 
-    // The heading, not the tab label — both say 'My queue'.
-    expect(await screen.findByRole('heading', { name: 'My queue' })).toBeInTheDocument();
+    // The crew shell: its top bar names the role, and its tab bar is present.
+    // Asserting on the queue's *contents* would couple this test to whether
+    // the API happened to answer, which is not what it is checking.
+    expect(await screen.findByText('Road Maintenance')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /verify/i })).toBeInTheDocument();
     expect(screen.getByTestId('path')).toHaveTextContent('/crew');
     expect(useSession.getState().session?.role).toBe('road-maintenance');
   });

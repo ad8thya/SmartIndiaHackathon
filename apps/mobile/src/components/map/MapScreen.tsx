@@ -11,7 +11,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Crosshair, Loader2, MapPinOff } from 'lucide-react';
-import { UTMap, type MapLine, type MapMarker } from './UTMap';
+import { LazyMap } from './LazyMap';
+import type { MapLine, MapMarker } from './UTMap';
 import { BottomSheet } from '../BottomSheet';
 import { useGeolocation } from '../../lib/useGeolocation';
 import { haptic } from '../../lib/haptics';
@@ -61,7 +62,7 @@ export function MapScreen({
 
   return (
     <div className="relative h-full w-full">
-      <UTMap
+      <LazyMap
         markers={markers}
         lines={lines}
         user={user}

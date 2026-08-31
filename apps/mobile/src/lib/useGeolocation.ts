@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { INITIAL_VIEW } from './mapStyle';
+import { INITIAL_VIEW } from './mapView';
 
 export type GeoState =
   | { status: 'idle' }

@@ -19,8 +19,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import maplibregl, { type MapGeoJSONFeature } from 'maplibre-gl';
+import { MapPinOff } from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { buildMapStyle, INITIAL_VIEW, LOCATE_ZOOM } from '../../lib/mapStyle';
+import { buildMapStyle } from '../../lib/mapStyle';
+import { INITIAL_VIEW, LOCATE_ZOOM } from '../../lib/mapView';
 
 export interface MapMarker {
   id: string;
@@ -108,6 +110,7 @@ export function UTMap({
   const map = useRef<maplibregl.Map | null>(null);
   const userMarker = useRef<maplibregl.Marker | null>(null);
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   // Props the map event handlers need but that must not re-create the map.
   const selectRef = useRef(onSelectMarker);
@@ -117,18 +120,29 @@ export function UTMap({
   useEffect(() => {
     if (!container.current || map.current) return;
 
-    const instance = new maplibregl.Map({
-      container: container.current,
-      style: buildMapStyle(),
-      center: [INITIAL_VIEW.lon, INITIAL_VIEW.lat],
-      zoom: zoom ?? INITIAL_VIEW.zoom,
-      attributionControl: false,
-      // A phone has no cursor to hover with and no keyboard to pan with.
-      dragRotate: false,
-      pitchWithRotate: false,
-      touchPitch: false,
-      keyboard: false,
-    });
+    // maplibre throws from its constructor when it cannot get a WebGL context
+    // — an old device, WebGL disabled in settings, a locked-down kiosk browser,
+    // or a headless test environment. Unhandled, that error propagates out of
+    // the effect and takes the whole screen with it, so a phone with no WebGL
+    // sees a blank page instead of the list and controls around the map.
+    let instance: maplibregl.Map;
+    try {
+      instance = new maplibregl.Map({
+        container: container.current,
+        style: buildMapStyle(),
+        center: [INITIAL_VIEW.lon, INITIAL_VIEW.lat],
+        zoom: zoom ?? INITIAL_VIEW.zoom,
+        attributionControl: false,
+        // A phone has no cursor to hover with and no keyboard to pan with.
+        dragRotate: false,
+        pitchWithRotate: false,
+        touchPitch: false,
+        keyboard: false,
+      });
+    } catch {
+      setFailed(true);
+      return;
+    }
 
     // Two fingers rotate by default. On a phone that fires during almost every
     // pinch, leaving the map at a bearing the user did not ask for.
@@ -253,6 +267,21 @@ export function UTMap({
       easing: (t) => 1 - Math.pow(1 - t, 3),
     });
   }, [center, zoom, ready]);
+
+  if (failed) {
+    // Not a blank box and not an error dump: the map is one way of showing
+    // this data, and the screen around it still works without it.
+    return (
+      <div
+        className={`flex h-full w-full flex-col items-center justify-center gap-2 bg-canvas px-6 text-center ${className}`}
+      >
+        <MapPinOff size={22} className="text-ink-faint" />
+        <p className="text-[12px] leading-relaxed text-ink-soft">
+          This device cannot draw the map. Everything else on this screen still works.
+        </p>
+      </div>
+    );
+  }
 
   return <div ref={container} className={`h-full w-full ${className}`} />;
 }
