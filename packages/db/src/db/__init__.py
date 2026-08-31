@@ -16,6 +16,7 @@ from .geo import linestring, point, to_lonlat, to_lonlat_list
 from .models import (
     Bus,
     BusPosition,
+    CitizenReport,
     Event,
     EventObservation,
     Incident,
@@ -36,6 +37,7 @@ __all__ = [
     "Base",
     "Bus",
     "BusPosition",
+    "CitizenReport",
     "DbSettings",
     "Event",
     "EventObservation",

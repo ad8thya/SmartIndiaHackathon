@@ -53,8 +53,8 @@ mock for real code is a one-line change inside one folder that no other file obs
 | **risk** | M3 | **Working, and the intended v1.** A real, transparent 6-component weighted index (PCI 30% / congestion 20% / pedestrian density 15% / school proximity 15% / near-miss frequency 12% / recent incidents 8%). `components` always sum to `score`; `explanation` never empty | **Stub** — `score()` raises. Learned (gradient-boosted) upgrade path documented, same explainability requirement | `services/cloud/intelligence/urban_risk/impl.py` |
 | **recommend** | M2 | **Working.** Five deterministic proximity rules off the same `RiskContext` risk reads (ZEBRA_CROSSING, SIGNAL_TIMING, DIVIDER, DRAINAGE, SPEED_CALMING) | **Stub** — `recommend()` raises. Real evidence-id lookup from postgres documented | `services/cloud/intelligence/recommend/impl.py` |
 | **api** | M5 | n/a — real | **Real.** 19 HTTP routes + 1 WebSocket. Degrades to in-memory cache when postgres is down | `services/cloud/api/**` |
-| **db** | M5 | n/a — real | **Real.** 9 tables, PostGIS Geography, 1 migration, autogenerate verified empty | `packages/db/**` |
-| **contracts** | shared | n/a | **Real, and FROZEN (v1.1.0).** 8 Protocols, 17 models, pure fusion maths. One approved one-time amendment applied — see §10 | `packages/contracts/**` (team decision) |
+| **db** | M5 | n/a — real | **Real.** 10 tables, PostGIS Geography, 2 migrations, autogenerate verified empty | `packages/db/**` |
+| **contracts** | shared | n/a | **Real, and FROZEN (v1.2.0).** 8 Protocols, 18 models, pure fusion maths. Two approved amendments applied — see §10 and §12 | `packages/contracts/**` (team decision) |
 | **frontend** | M6 | n/a — real | **Real.** ONE app (`apps/web`) on ONE port: role picker, all 8 role views, and the mobile view at `/field`. Real offline basemap (committed PMTiles), real 3D buildings, contract types generated from `packages/contracts` | `apps/web/src/**` |
 
 ### What the mocks actually produce
@@ -562,3 +562,94 @@ anchor pairs disconnect.
 `defects`, `pedestrian`, `incidents`, `traffic`, `urban_risk` and `recommend`
 still raise `NotImplementedError`, as designed. `urban_risk`'s and
 `recommend`'s mocks are the intended v1, not placeholders — see §2.
+
+---
+
+## 12. Citizen reports — contracts amendment (v1.2.0)
+
+> ⚠️ **NEEDS A TEAM ACK BEFORE THIS LANDS.** §3 rule 1 says a change to
+> `packages/contracts` requires agreement from every owner it touches. Owners
+> touched here: **M5** (table, migration, endpoints) and **M6** (generated
+> types, console panel). Nothing in this amendment changes anything M1–M4
+> import. Read this section, then ACK.
+
+**Why it exists.** The mobile app's citizen report was written to
+`localStorage` and nowhere else. It looked like it worked, no municipal
+operator ever saw one, and a cache clear deleted every report a citizen had
+ever filed. That was in the honesty register. This is the fix, and it needs a
+model because the report has to cross the wire.
+
+### What was added, and why it stayed additive
+
+Nothing was renamed, removed, or had a signature changed. Every previously
+valid construction of every model still validates.
+
+| Added | Where |
+|---|---|
+| `ReportCategory`, `ReportStatus` | `enums.py` — new StrEnums |
+| `TERMINAL_REPORT_STATUSES` | `enums.py` — mirrors `TERMINAL_STATUSES` |
+| `WSMessageType.REPORT_NEW` | `enums.py` — a new member, the cheap kind |
+| `CitizenReport` | `models.py` — 1 new wire model (17 → **18**) |
+| `citizen_reports` table + migration `0002` | `packages/db/**` (9 → **10** tables) |
+| `POST/GET /api/reports`, `GET /api/reports/{id}`, `GET /api/reports/photos/{f}` | `services/cloud/api/routers/reports.py` |
+| `MEDIA_DIR` | `services/cloud/api/config.py` |
+| `Reports` panel | `apps/web/src/panels/ReportsPanel.tsx` |
+
+`alembic revision --autogenerate` comes back **empty** after `0002` — verified,
+same acceptance test as `0001`.
+
+### A citizen report is NOT an Observation
+
+This is the decision worth re-reading before anyone "simplifies" it by reusing
+`Observation` with a synthetic `bus_id`.
+
+An `Observation` carries `raw_confidence` because a model produced it. A person
+is not 0.83 sure they saw a pothole. Fabricating a number there would let
+citizen input enter `fuse_confidence` as though it were a corroborating camera
+— which means anyone with a phone could escalate an event up the workflow
+ladder by reporting the same spot repeatedly. A report is **evidence for a
+human to weigh**, never an input to the fusion arithmetic.
+
+An `Observation` is also anonymous machine output. A report has a person
+attached, which makes it personal data (`reporter_name`) with everything that
+implies.
+
+Same reasoning for the two new enums rather than reuse:
+
+- **`ReportCategory` is not `DetectionClass`.** `ALLIGATOR_CRACK` vs
+  `LONGITUDINAL_CRACK` is a distinction a YOLO head makes, not one to ask of
+  someone standing on a pavement. Six buttons fit on a phone; twelve do not.
+- **`ReportStatus` is not `WorkflowStatus`.** That ladder starts at `DETECTED`
+  and passes through `AI_VERIFIED` — rungs describing machine corroboration,
+  which mean nothing for something a person typed. A linked report keeps its
+  own status and the event keeps its own, so "the city acknowledged your
+  report" and "the defect reached `MAINTENANCE_ASSIGNED`" are never conflated
+  into one misleading chip.
+
+**Linking is a human act.** `linked_event_id` is set by an operator who judges
+two things to be the same thing. There is deliberately no proximity-based
+auto-link, and adding one would be a way of pretending a citizen classified a
+defect.
+
+### Photos are files, not rows
+
+The phone posts one base64 data URI; the API decodes it, writes a real file
+under `MEDIA_DIR`, and stores only the path. Keeping the base64 would put
+several MB of string in every list response *and* in the `REPORT_NEW` frame
+that fans out to every connected console. Type is restricted to
+jpeg/png/webp, decoded size is capped at 8 MB, the stored filename is the
+report's own uuid (nothing from the request reaches the path), and the read
+endpoint re-checks that the resolved path is still inside the photo directory.
+
+An unusable photo is a **422, not a silent drop**: a citizen who took a
+picture and got a report back with no image would have no way to know the one
+piece of evidence they gathered was discarded.
+
+### What the client may not set
+
+`ReportCreate` is `extra="forbid"` and does not accept `report_id`, `status`,
+`created_at` or `linked_event_id`. A phone that could set `status` could mark
+its own report resolved; one that could set `linked_event_id` could attach
+itself to any event in the system. There is no auth on this endpoint — see
+`apps/mobile/src/store/session.ts` — so the request model is the only boundary
+there is.

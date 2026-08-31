@@ -316,6 +316,7 @@ def check_api(report: Report) -> None:
                 "/api/events",
                 "/api/roads/SEG-27B-000/condition",
                 "/api/incidents",
+                "/api/reports",
                 "/api/analytics/summary",
                 "/api/roads/SEG-27B-000/risk",
                 "/api/recommendations",
@@ -335,6 +336,30 @@ def check_api(report: Report) -> None:
             with client.websocket_connect("/ws/live") as socket:
                 hello = socket.receive_json()
                 report.add("WS /ws/live accepts a connection", hello["type"] == "HELLO")
+
+            # The check that would have caught the original bug: the phone's
+            # report screen "worked" for weeks while writing to a browser cache
+            # no operator could read. A report has to reach the API and come
+            # back out of it with an id.
+            filed = client.post(
+                "/api/reports",
+                json={
+                    "category": "POTHOLE",
+                    "description": "smoke test — safe to ignore",
+                    "lat": 13.0067,
+                    "lon": 80.2570,
+                    "reporter_name": "smoke-test",
+                },
+            )
+            stored = (
+                filed.status_code == 201
+                and client.get(f"/api/reports/{filed.json()['report_id']}").status_code == 200
+            )
+            report.add(
+                "a citizen report reaches the API and is readable back",
+                stored,
+                "" if stored else f"HTTP {filed.status_code}",
+            )
     except Exception as exc:
         report.add("api importable and serving", False, f"{type(exc).__name__}: {exc}")
 

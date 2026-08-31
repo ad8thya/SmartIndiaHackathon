@@ -24,6 +24,8 @@ from .enums import (
     INFRASTRUCTURE_CLASSES,
     DetectionClass,
     RecommendationType,
+    ReportCategory,
+    ReportStatus,
     RiskBand,
     RiskLevel,
     Severity,
@@ -38,6 +40,7 @@ __all__ = [
     "AnalyticsSummary",
     "BBox",
     "BusPosition",
+    "CitizenReport",
     "Event",
     "FrameMeta",
     "HealthStatus",
@@ -702,6 +705,80 @@ class IncidentReport(_Frozen):
                     "plate_text": "TN 09 BX 4412",
                     "plate_confidence": 0.87,
                     "evidence_uris": ["s3://urban-twin/evidence/incident-9c5b94b1-plate.jpg"],
+                }
+            ]
+        },
+    )
+
+
+class CitizenReport(_Frozen):
+    """Something a member of the public reported from the phone app. (v1.2.0)
+
+    The one record in this system that a human, not a camera, creates. That
+    distinction is the whole reason it is a separate model rather than an
+    ``Observation`` with a synthetic ``bus_id``:
+
+      · an ``Observation`` carries ``raw_confidence`` because a model produced
+        it. A person is not 0.83 sure they saw a pothole, and fabricating a
+        number here would let citizen input enter the fusion arithmetic as if
+        it were a corroborating camera. It must not. A report is evidence for a
+        human to weigh, never an input to ``fuse_confidence``.
+      · an ``Observation`` is anonymous machine output. This one has a person
+        attached, which makes it personal data with all that implies (see
+        ``reporter_name``).
+
+    A report is linked to a fused ``Event`` only by an operator deciding they
+    are the same thing — ``linked_event_id`` records that decision. Nothing
+    links automatically.
+    """
+
+    report_id: UUID = Field(default_factory=uuid4)
+    category: ReportCategory
+    description: str = Field(max_length=2000)
+    lat: Latitude
+    lon: Longitude
+    #: reverse-geocoded and then EDITED BY THE REPORTER — this is what they say
+    #: the place is called, which is often better than the geocoder and is never
+    #: authoritative. ``lat``/``lon`` are the machine-readable location.
+    address: str = Field(default="", max_length=300)
+    #: where the API stored the photo, e.g. ``/api/reports/photos/<id>.jpg``.
+    #: NEVER a base64 data URI: a 2 MB string in every list response is a
+    #: performance bug, and it would put image bytes in the WebSocket frame.
+    photo_uri: str | None = Field(default=None, max_length=500)
+    #: as typed at sign-in. Personal data under the DPDP Act 2023: it is shown
+    #: to municipal operators handling the report and to the reporter, and it
+    #: is stripped from anything public — see the citizen map, which serves
+    #: reports without it.
+    reporter_name: str = Field(default="", max_length=120)
+    #: GCC ward, best-effort from the coordinates. Free text, not an enum:
+    #: Chennai has 200 wards and they get redrawn.
+    ward: str = Field(default="", max_length=64)
+    status: ReportStatus = ReportStatus.SUBMITTED
+    created_at: datetime
+    #: set only when an operator judges this report to be the same real-world
+    #: thing as a fused event. There is no automatic linking.
+    linked_event_id: UUID | None = None
+
+    _aware = field_validator("created_at")(_require_aware)
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "report_id": "3f1a0c22-6d4e-4a71-9f0b-2c4e6a8b1d33",
+                    "category": "POTHOLE",
+                    "description": "Deep hole in the left lane, cars swerving into the bus lane.",
+                    "lat": 13.0067,
+                    "lon": 80.2570,
+                    "address": "Sardar Patel Rd, near Adyar depot",
+                    "photo_uri": "/api/reports/photos/3f1a0c22-6d4e-4a71-9f0b-2c4e6a8b1d33.jpg",
+                    "reporter_name": "9840 012345",
+                    "ward": "Ward 173",
+                    "status": "SUBMITTED",
+                    "created_at": "2026-08-21T09:14:03+05:30",
+                    "linked_event_id": None,
                 }
             ]
         },

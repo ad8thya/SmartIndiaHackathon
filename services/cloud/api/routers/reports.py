@@ -1,0 +1,314 @@
+"""Citizen reports: POST /api/reports and friends. Owned by M5.
+
+This endpoint exists because the mobile app's citizen report used to be
+written to ``localStorage`` and nowhere else. It looked like it worked, it
+never reached a person, and it vanished on a cache clear. That was in the
+honesty register; this is the fix.
+
+Two things here are deliberate and worth not undoing:
+
+**A report is not an Observation.** It never enters fusion, it carries no
+confidence, and nothing links it to an ``Event`` automatically. An operator
+sets ``linked_event_id`` when they judge two things to be the same thing.
+Auto-linking on proximity would be a way of pretending a citizen classified a
+defect, and it would let anyone with a phone move the workflow ladder.
+
+**Photos are stored as files, not as data URIs in the row.** The phone sends
+one base64 data URI in the POST body; this module decodes it, writes a real
+file, and stores only a path. Keeping the base64 would put a couple of MB of
+string in every list response and in the WebSocket frame that fans out to
+every connected console.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import logging
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import UUID, uuid4
+
+from contracts import CitizenReport, ReportCategory, ReportStatus, WSMessageType
+from db import CitizenReport as ReportRow
+from db import point, session_scope, to_lonlat
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+
+from ..deps import Bus, Settings, State
+from ..hub import LiveState
+
+log = logging.getLogger("urban-twin.reports")
+router = APIRouter(prefix="/api", tags=["reports"])
+
+#: Decoded image size cap. A modern phone camera JPEG is 2–5 MB; 8 MB leaves
+#: room for that without letting an unauthenticated endpoint (there is no auth
+#: on this prototype — see apps/mobile/src/store/session.ts) fill the disk one
+#: request at a time.
+MAX_PHOTO_BYTES = 8 * 1024 * 1024
+_TOO_BIG = f"photo exceeds {MAX_PHOTO_BYTES // 1024 // 1024} MB"
+
+#: What we are willing to decode and write. Not a security boundary on its own
+#: — the bytes are never executed and are served with this content type — but
+#: it stops a caller storing arbitrary files through an image field.
+ALLOWED_PHOTO_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+_DATA_URI = re.compile(r"^data:(?P<mime>[\w.+-]+/[\w.+-]+);base64,(?P<data>.+)$", re.DOTALL)
+
+
+class ReportCreate(BaseModel):
+    """POST /api/reports body.
+
+    Not the ``CitizenReport`` contract model: the client does not get to
+    choose ``report_id``, ``status``, ``created_at`` or ``linked_event_id``.
+    A phone that could set its own status could mark its own report resolved.
+    """
+
+    category: ReportCategory
+    description: str = Field(default="", max_length=2000)
+    lat: float = Field(ge=-90.0, le=90.0)
+    lon: float = Field(ge=-180.0, le=180.0)
+    address: str = Field(default="", max_length=300)
+    reporter_name: str = Field(default="", max_length=120)
+    ward: str = Field(default="", max_length=64)
+    #: ``data:image/jpeg;base64,...`` straight from the phone's camera input.
+    #: Decoded, written to disk and discarded; only the resulting path is kept.
+    photo: str | None = Field(default=None, description="base64 data URI, jpeg/png/webp")
+
+    model_config = {
+        # Reject unknown fields rather than ignoring them. A phone that sends
+        # `status` or `report_id` is either an old client or a malicious one;
+        # accepting the request and silently dropping the field tells it the
+        # value took effect. `extra="forbid"` is also what the frozen contract
+        # models use, so the request boundary behaves like the wire boundary.
+        "extra": "forbid",
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "category": "POTHOLE",
+                    "description": "Deep hole in the left lane, cars swerving.",
+                    "lat": 13.0067,
+                    "lon": 80.2570,
+                    "address": "Sardar Patel Rd, near Adyar depot",
+                    "reporter_name": "9840 012345",
+                    "ward": "Ward 173",
+                    "photo": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+                }
+            ]
+        }
+    }
+
+
+def _photos_dir(media_root: str) -> Path:
+    directory = Path(media_root) / "reports"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _store_photo(data_uri: str, report_id: UUID, media_root: str) -> str:
+    """Decode a data URI to a file and return the path this API serves it at.
+
+    Raises HTTPException(422) rather than silently dropping the photo: a
+    citizen who took a picture and got back a report with no image would have
+    no way to tell that the one piece of evidence they gathered was discarded.
+    """
+    match = _DATA_URI.match(data_uri.strip())
+    if match is None:
+        raise HTTPException(
+            status_code=422,
+            detail="photo must be a base64 data URI, e.g. 'data:image/jpeg;base64,...'",
+        )
+
+    mime = match.group("mime").lower()
+    suffix = ALLOWED_PHOTO_TYPES.get(mime)
+    if suffix is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"unsupported photo type {mime!r} — "
+                f"use {', '.join(sorted(ALLOWED_PHOTO_TYPES))}"
+            ),
+        )
+
+    # Check the encoded length first. base64 is 4/3 of the payload, so this
+    # rejects an oversized upload before allocating the decoded copy.
+    if len(match.group("data")) > MAX_PHOTO_BYTES * 4 // 3 + 4:
+        raise HTTPException(status_code=413, detail=_TOO_BIG)
+
+    try:
+        blob = base64.b64decode(match.group("data"), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="photo is not valid base64") from exc
+
+    if len(blob) > MAX_PHOTO_BYTES:
+        raise HTTPException(status_code=413, detail=_TOO_BIG)
+
+    # The filename is the report's own uuid, so it is unguessable-ish and can
+    # never collide or traverse — nothing from the request reaches the path.
+    path = _photos_dir(media_root) / f"{report_id}{suffix}"
+    path.write_bytes(blob)
+    return f"/api/reports/photos/{path.name}"
+
+
+def _row_to_report(row: ReportRow) -> CitizenReport:
+    lon, lat = to_lonlat(row.geom)
+    return CitizenReport(
+        report_id=row.report_id,
+        category=ReportCategory(row.category),
+        description=row.description,
+        lat=lat,
+        lon=lon,
+        address=row.address,
+        photo_uri=row.photo_uri,
+        reporter_name=row.reporter_name,
+        ward=row.ward,
+        status=ReportStatus(row.status),
+        created_at=row.created_at,
+        linked_event_id=row.linked_event_id,
+    )
+
+
+async def merged_reports(state: LiveState) -> list[CitizenReport]:
+    """Every report the system knows about: postgres, plus anything this
+    process accepted that has not landed there.
+
+    THE one definition of "all reports" — the same arrangement
+    ``routers/events.py::merged_events`` uses, and for the same reason. A
+    second, subtly different read path is how the KPI strip and the panel
+    under it came to disagree once already (BUILD.md §4, F9).
+    """
+    try:
+        async with session_scope() as session:
+            rows = (await session.execute(select(ReportRow))).scalars().all()
+        reports = [_row_to_report(row) for row in rows]
+        known = {report.report_id for report in reports}
+        reports.extend(r for r in state.report_list() if r.report_id not in known)
+    except Exception as exc:
+        log.warning("report read fell back to memory: %s", exc)
+        reports = state.report_list()
+
+    reports.sort(key=lambda report: report.created_at, reverse=True)
+    return reports
+
+
+@router.post(
+    "/reports",
+    response_model=CitizenReport,
+    status_code=201,
+    summary="File a citizen report",
+)
+async def create_report(
+    body: ReportCreate,
+    state: State,
+    broadcaster: Bus,
+    settings: Settings,
+) -> CitizenReport:
+    report_id = uuid4()
+
+    photo_uri = (
+        _store_photo(body.photo, report_id, settings.MEDIA_DIR) if body.photo else None
+    )
+
+    report = CitizenReport(
+        report_id=report_id,
+        category=body.category,
+        description=body.description,
+        lat=body.lat,
+        lon=body.lon,
+        address=body.address,
+        photo_uri=photo_uri,
+        reporter_name=body.reporter_name,
+        ward=body.ward,
+        status=ReportStatus.SUBMITTED,
+        created_at=datetime.now(tz=UTC),
+    )
+
+    # Cache first, then persist. If postgres is down the citizen still gets a
+    # report id and the console still sees it — which is the whole point of
+    # not writing to localStorage any more. The warning is the honest record
+    # that this one is not durable yet.
+    state.add_report(report)
+
+    try:
+        async with session_scope() as session:
+            session.add(
+                ReportRow(
+                    report_id=report.report_id,
+                    category=str(report.category),
+                    description=report.description,
+                    geom=point(report.lat, report.lon),
+                    address=report.address,
+                    photo_uri=report.photo_uri,
+                    reporter_name=report.reporter_name,
+                    ward=report.ward,
+                    status=str(report.status),
+                    created_at=report.created_at,
+                )
+            )
+    except Exception as exc:
+        log.warning("could not persist report %s: %s", report.report_id, exc)
+
+    broadcaster.publish(WSMessageType.REPORT_NEW, report.model_dump(mode="json"))
+    return report
+
+
+@router.get("/reports", response_model=list[CitizenReport], summary="Filtered report list")
+async def list_reports(
+    state: State,
+    status: list[ReportStatus] | None = Query(default=None),
+    category: list[ReportCategory] | None = Query(default=None),
+    ward: str | None = Query(default=None),
+    reporter_name: str | None = Query(
+        default=None, description="exact match — how the phone shows 'my reports'"
+    ),
+    since: datetime | None = Query(default=None, description="created_at newer than this"),
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[CitizenReport]:
+    reports = await merged_reports(state)
+
+    if status:
+        wanted = set(status)
+        reports = [r for r in reports if r.status in wanted]
+    if category:
+        categories = set(category)
+        reports = [r for r in reports if r.category in categories]
+    if ward:
+        reports = [r for r in reports if r.ward == ward]
+    if reporter_name:
+        reports = [r for r in reports if r.reporter_name == reporter_name]
+    if since is not None:
+        reports = [r for r in reports if r.created_at >= since]
+
+    return reports[:limit]
+
+
+# Declared before /reports/{report_id} — otherwise the uuid route matches
+# "photos" first and every image request 422s on the path parameter.
+@router.get("/reports/photos/{filename}", include_in_schema=False)
+async def get_report_photo(filename: str, settings: Settings) -> FileResponse:
+    """Serve a stored report photo.
+
+    ``filename`` is never trusted: the resolved path must still be inside the
+    photo directory, which rules out `../` traversal regardless of what
+    Starlette did or did not normalise on the way in.
+    """
+    directory = _photos_dir(settings.MEDIA_DIR).resolve()
+    candidate = (directory / filename).resolve()
+    if not candidate.is_relative_to(directory) or not candidate.is_file():
+        raise HTTPException(status_code=404, detail="no such photo")
+    return FileResponse(candidate)
+
+
+@router.get("/reports/{report_id}", response_model=CitizenReport, summary="One report")
+async def get_report(report_id: UUID, state: State) -> CitizenReport:
+    for report in await merged_reports(state):
+        if report.report_id == report_id:
+            return report
+    raise HTTPException(status_code=404, detail=f"no report {report_id}")

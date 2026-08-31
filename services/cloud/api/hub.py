@@ -21,6 +21,7 @@ from uuid import UUID
 
 from contracts import (
     BusPosition,
+    CitizenReport,
     Event,
     IncidentReport,
     Observation,
@@ -39,6 +40,11 @@ class LiveState:
         self.observations: deque[Observation] = deque(maxlen=observation_buffer)
         self.events: dict[UUID, Event] = {}
         self.incidents: deque[IncidentReport] = deque(maxlen=500)
+        #: Citizen reports, newest first. Postgres is the source of truth; this
+        #: is the same hot-cache/fallback arrangement `events` has, and it is
+        #: what keeps a report the citizen just sent visible on the console
+        #: during the window where the database is unreachable.
+        self.reports: deque[CitizenReport] = deque(maxlen=500)
         self.started_at = datetime.now(tz=UTC)
         self.km_surveyed = 0.0
         self._lock = asyncio.Lock()
@@ -60,6 +66,9 @@ class LiveState:
     def add_incident(self, incident: IncidentReport) -> None:
         self.incidents.appendleft(incident)
 
+    def add_report(self, report: CitizenReport) -> None:
+        self.reports.appendleft(report)
+
     def apply_event(self, event: Event) -> WSMessageType:
         """Store a fused event and report whether it is new or an update."""
         previous = self.events.get(event.event_id)
@@ -78,6 +87,9 @@ class LiveState:
 
     def event_list(self) -> list[Event]:
         return list(self.events.values())
+
+    def report_list(self) -> list[CitizenReport]:
+        return list(self.reports)
 
 
 class Broadcaster:

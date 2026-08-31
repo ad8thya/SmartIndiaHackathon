@@ -42,6 +42,7 @@ def seeded_state() -> None:
     state.events.clear()
     state.observations.clear()
     state.incidents.clear()
+    state.reports.clear()
 
     from contracts import BusPosition
 
@@ -416,3 +417,178 @@ def test_websocket_receives_broadcasts(client: TestClient) -> None:
         frame = socket.receive_json()
         assert frame["type"] == WSMessageType.EVENT_NEW
         assert frame["payload"]["event_id"] == "test"
+
+
+# ── citizen reports ─────────────────────────────────────────────────────────
+# These are the reason T5 exists: the mobile app used to write a citizen report
+# to localStorage and nowhere else, so it never reached a person and vanished
+# on a cache clear. Like every other test here they run with no postgres, which
+# is also the interesting path — a report the database never received must
+# still come back with an id and still reach the console over the WebSocket.
+
+#: 1x1 transparent PNG. Small enough to inline, real enough to decode.
+TINY_PNG = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+@pytest.fixture
+def media_dir(tmp_path: object) -> object:
+    """Point photo storage at a temp dir so tests never write into data/."""
+    from services.cloud.api.config import get_api_settings
+
+    settings = get_api_settings()
+    previous = settings.MEDIA_DIR
+    settings.MEDIA_DIR = str(tmp_path)
+    yield tmp_path
+    settings.MEDIA_DIR = previous
+
+
+def _report_body(**overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "category": "POTHOLE",
+        "description": "Deep hole in the left lane, cars swerving into the bus lane.",
+        "lat": 13.0067,
+        "lon": 80.2570,
+        "address": "Sardar Patel Rd, near Adyar depot",
+        "reporter_name": "9840 012345",
+        "ward": "Ward 173",
+    }
+    body.update(overrides)
+    return body
+
+
+def test_report_is_accepted_and_readable_back(client: TestClient, media_dir: object) -> None:
+    created = client.post("/api/reports", json=_report_body())
+    assert created.status_code == 201, created.text
+    report = created.json()
+
+    assert report["status"] == "SUBMITTED"
+    assert report["linked_event_id"] is None
+    assert report["report_id"]
+
+    # The thing localStorage could never do: someone else can read it.
+    fetched = client.get(f"/api/reports/{report['report_id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["description"] == report["description"]
+
+    assert report["report_id"] in [r["report_id"] for r in client.get("/api/reports").json()]
+
+
+def test_a_report_never_arrives_already_acknowledged(client: TestClient, media_dir: object) -> None:
+    """The client does not get to choose its own status, id or timestamps.
+
+    A phone that could set `status` could mark its own report resolved, and one
+    that could set `linked_event_id` could attach itself to any event in the
+    system. `extra="forbid"` on the request model is what stops both.
+    """
+    rejected = client.post(
+        "/api/reports",
+        json=_report_body(status="RESOLVED", report_id=str(uuid4())),
+    )
+    assert rejected.status_code == 422
+
+
+def test_photo_is_stored_as_a_file_and_served_back(client: TestClient, media_dir: object) -> None:
+    report = client.post("/api/reports", json=_report_body(photo=TINY_PNG)).json()
+
+    # A path, never the base64 back — a data URI in the row would ride along in
+    # every list response and in the WebSocket frame.
+    assert report["photo_uri"].startswith("/api/reports/photos/")
+    assert "base64" not in report["photo_uri"]
+
+    stored = media_dir / "reports"  # type: ignore[operator]
+    assert len(list(stored.iterdir())) == 1
+
+    served = client.get(report["photo_uri"])
+    assert served.status_code == 200
+    assert served.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_photo_that_is_not_an_image_is_refused_loudly(client: TestClient, media_dir: object) -> None:
+    """422, not a silently dropped photo.
+
+    A citizen who took a picture and got back a report with no image would have
+    no way to know the one piece of evidence they gathered was discarded.
+    """
+    refused = client.post(
+        "/api/reports",
+        json=_report_body(photo="data:application/x-sh;base64,ZWNobyBoaQ=="),
+    )
+    assert refused.status_code == 422
+    assert "unsupported photo type" in refused.text
+
+    assert client.post("/api/reports", json=_report_body(photo="not a data uri")).status_code == 422
+
+
+def test_oversized_photo_is_refused_before_it_is_decoded(
+    client: TestClient, media_dir: object
+) -> None:
+    from services.cloud.api.routers.reports import MAX_PHOTO_BYTES
+
+    huge = "data:image/jpeg;base64," + "A" * (MAX_PHOTO_BYTES * 4 // 3 + 64)
+    assert client.post("/api/reports", json=_report_body(photo=huge)).status_code == 413
+
+
+def test_reports_filter_the_way_the_phone_asks(client: TestClient, media_dir: object) -> None:
+    # Unique names per run. Unlike the rest of this file these reports may
+    # actually reach postgres when a developer has the stack up, and rows
+    # written by an earlier run are still there — so every assertion below
+    # scopes itself to its own data rather than assuming an empty table.
+    me = f"tester-{uuid4()}"
+    someone_else = f"tester-{uuid4()}"
+
+    client.post("/api/reports", json=_report_body(category="POTHOLE", reporter_name=someone_else))
+    client.post("/api/reports", json=_report_body(category="GARBAGE", reporter_name=me))
+
+    potholes = client.get("/api/reports", params={"category": "POTHOLE"}).json()
+    assert potholes and all(r["category"] == "POTHOLE" for r in potholes)
+
+    # "My reports" on the phone is this query and nothing cleverer.
+    mine = client.get("/api/reports", params={"reporter_name": me}).json()
+    assert [r["category"] for r in mine] == ["GARBAGE"]
+
+    # Nothing arrives resolved, so this filter must not match what we just sent.
+    resolved = client.get("/api/reports", params={"status": "RESOLVED"}).json()
+    assert me not in [r["reporter_name"] for r in resolved]
+
+
+def test_newest_report_is_first(client: TestClient, media_dir: object) -> None:
+    first = client.post("/api/reports", json=_report_body(description="older")).json()
+    second = client.post("/api/reports", json=_report_body(description="newer")).json()
+    listed = [r["report_id"] for r in client.get("/api/reports").json()]
+    # Relative order, so rows left over from a previous run cannot affect it.
+    assert listed.index(second["report_id"]) < listed.index(first["report_id"])
+
+
+def test_unknown_report_is_404(client: TestClient) -> None:
+    assert client.get(f"/api/reports/{uuid4()}").status_code == 404
+
+
+def test_photo_path_cannot_escape_the_photo_directory(
+    client: TestClient, media_dir: object
+) -> None:
+    assert client.get("/api/reports/photos/..%2F..%2Fetc%2Fpasswd").status_code == 404
+
+
+def test_submitting_a_report_broadcasts_report_new(client: TestClient, media_dir: object) -> None:
+    """The half of T6 that makes a report appear on the console without a refresh."""
+    import json
+
+    from services.cloud.api.hub import broadcaster
+
+    queue = broadcaster.subscribe()
+    try:
+        report = client.post("/api/reports", json=_report_body()).json()
+        frames = []
+        while not queue.empty():
+            frames.append(json.loads(queue.get_nowait()))
+    finally:
+        broadcaster.unsubscribe(queue)
+
+    new = [f for f in frames if f["type"] == WSMessageType.REPORT_NEW]
+    assert len(new) == 1
+    assert new[0]["payload"]["report_id"] == report["report_id"]
+    # The frame carries the path, not the image — see the note on photo_uri.
+    assert "base64" not in json.dumps(new[0])

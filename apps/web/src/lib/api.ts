@@ -9,6 +9,7 @@
 import type {
   AnalyticsSummary,
   BusPosition,
+  CitizenReport,
   DangerousJunction,
   GeoJsonFeatureCollection,
   HealthStatus,
@@ -139,6 +140,23 @@ export const api = {
 
   incidents: (params: { [key: string]: unknown; class?: string; with_plate?: boolean; limit?: number } = {}) =>
     request<IncidentReport[]>(`/api/incidents${query(params)}`),
+
+  /**
+   * Reports filed by the public from apps/mobile. These are NOT events: no
+   * confidence, no fusion, and nothing links one to an event automatically —
+   * see the CitizenReport contract model. The console shows them so a person
+   * can make that judgement.
+   */
+  reports: (
+    params: {
+      [key: string]: unknown;
+      status?: string[];
+      category?: string[];
+      ward?: string;
+      reporter_name?: string;
+      limit?: number;
+    } = {},
+  ) => request<CitizenReport[]>(`/api/reports${query(params)}`),
 
   summary: () => request<AnalyticsSummary>('/api/analytics/summary'),
 

@@ -24,6 +24,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -234,6 +235,66 @@ class Incident(Base, TimestampMixin):
     )
 
 
+class CitizenReport(Base):
+    """Something a member of the public reported from the phone app.
+
+    Before this table existed the mobile app wrote reports to ``localStorage``
+    and nowhere else — they were invisible to the console, lost on a cache
+    clear, and never reached a person. This is the fix.
+
+    The row deliberately does NOT reuse ``observations``. A citizen report is
+    not sensor output: it carries no confidence, must never enter the fusion
+    arithmetic, and has a person attached to it. See the ``CitizenReport``
+    contract model for the full reasoning.
+
+    ``linked_event_id`` is ON DELETE SET NULL, not CASCADE. If an operator
+    deletes a fused event the citizen's report must survive — they filed it,
+    the city received it, and the record of that is theirs, not the event's.
+
+    This is the one table that does NOT use ``TimestampMixin``. Its
+    ``created_at`` means "when the citizen sent it", which is data the phone
+    supplies and which a queued offline report backdates; the mixin's means
+    "when the row was written" and carries a ``now()`` server default. Mixing
+    in and then shadowing the column would leave the two meanings sharing a
+    name, so both columns are declared here instead.
+    """
+
+    __tablename__ = "citizen_reports"
+
+    report_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    geom: Mapped[object] = mapped_column(POINT, nullable=False)
+    #: what the reporter says the place is called. Not authoritative — geom is.
+    address: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    #: a path this API serves, never a base64 data URI. See routers/reports.py.
+    photo_uri: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: personal data (DPDP Act 2023). Shown to operators and to the reporter;
+    #: stripped from every public response.
+    reporter_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    ward: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), default="SUBMITTED", nullable=False)
+    #: WHEN THE CITIZEN SENT IT — supplied by the phone, and earlier than the
+    #: write for a report that was queued offline. No server default: a missing
+    #: value here is a bug in the caller, not something to paper over with now().
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: when the row last changed — ours, server-maintained, same as every other
+    #: table's `updated_at`.
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    linked_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("events.event_id", ondelete="SET NULL"), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_citizen_reports_geom", "geom", postgresql_using="gist"),
+        Index("ix_citizen_reports_status", "status"),
+        Index("ix_citizen_reports_created_at", "created_at"),
+        Index("ix_citizen_reports_linked_event_id", "linked_event_id"),
+    )
+
+
 class SchoolZone(Base):
     """Static geofences M3 uses to raise the pedestrian risk weighting."""
 
@@ -252,6 +313,7 @@ __all__ = [
     "Base",
     "Bus",
     "BusPosition",
+    "CitizenReport",
     "Event",
     "EventObservation",
     "Incident",

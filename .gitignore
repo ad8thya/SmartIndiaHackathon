@@ -39,6 +39,8 @@ data/hazards/
 data/hazards_prepared/
 data/plates/
 data/plates_prepared/
+# citizen report photos — user uploads, never committed
+data/media/
 
 # ML training run artefacts / notebook checkpoints / dataset archives
 runs/

@@ -1,7 +1,7 @@
 /**
  * GENERATED from packages/contracts — do not edit by hand.
  * Regenerate with:  .venv/bin/python scripts/gen_frontend_types.py
- * contracts version: 1.1.0
+ * contracts version: 1.2.0
  */
 
 export type DetectionClass =
@@ -57,6 +57,22 @@ export type RecommendationType =
   | 'SPEED_CALMING'
   | 'DRAINAGE';
 
+export type ReportCategory =
+  | 'POTHOLE'
+  | 'WATERLOGGING'
+  | 'DAMAGED_SIGN'
+  | 'STREETLIGHT'
+  | 'GARBAGE'
+  | 'OTHER';
+
+export type ReportStatus =
+  | 'SUBMITTED'
+  | 'ACKNOWLEDGED'
+  | 'LINKED'
+  | 'IN_PROGRESS'
+  | 'RESOLVED'
+  | 'REJECTED';
+
 export type WSMessageType =
   | 'HELLO'
   | 'BUS_POSITION'
@@ -64,6 +80,7 @@ export type WSMessageType =
   | 'EVENT_UPDATED'
   | 'ROAD_CONDITION'
   | 'INCIDENT'
+  | 'REPORT_NEW'
   | 'TICK';
 
 export const INFRASTRUCTURE_CLASSES: readonly DetectionClass[] = [
@@ -297,6 +314,21 @@ export interface IncidentReport {
   plate_hash: string | null;
   plate_confidence: number | null;
   evidence_uris: string[];
+}
+
+export interface CitizenReport {
+  report_id: string;
+  category: ReportCategory;
+  description: string;
+  lat: number;
+  lon: number;
+  address: string;
+  photo_uri: string | null;
+  reporter_name: string;
+  ward: string;
+  status: ReportStatus;
+  created_at: string;
+  linked_event_id: string | null;
 }
 
 export interface WorkOrder {

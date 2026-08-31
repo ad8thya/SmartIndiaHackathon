@@ -75,12 +75,12 @@ const SAFETY_CLASSES: DetectionClass[] = ['PEDESTRIAN_RISK', 'RASH_DRIVING', 'CO
 export const ROLE_SCOPES: Partial<Record<RoleId, RoleScope>> = {
   'municipal-authority': {
     label: 'Municipal Authority',
-    panels: ['defects', 'traffic', 'whatif', 'risk', 'incidents', 'intelligence'],
+    panels: ['defects', 'reports', 'traffic', 'whatif', 'risk', 'incidents', 'intelligence'],
     kpis: ['buses', 'km', 'events', 'speed', 'sla'],
   },
   'road-maintenance': {
     label: 'Road Maintenance',
-    panels: ['defects'],
+    panels: ['defects', 'reports'],
     classes: INFRA_CLASSES,
     kpis: ['events', 'sla'],
   },
@@ -103,7 +103,7 @@ export const ROLE_SCOPES: Partial<Record<RoleId, RoleScope>> = {
   },
   'smart-city-admin': {
     label: 'Smart City Admin',
-    panels: ['defects', 'traffic', 'whatif', 'risk', 'incidents', 'intelligence'],
+    panels: ['defects', 'reports', 'traffic', 'whatif', 'risk', 'incidents', 'intelligence'],
     kpis: ['buses', 'km', 'events', 'speed', 'sla'],
   },
 };

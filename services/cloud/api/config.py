@@ -36,6 +36,12 @@ class ApiSettings(BaseSettings):
     #: build is produced with `VITE_BASE=/m/` to match.
     MOBILE_DIST: str | None = None
 
+    #: Where citizen report photos are written. Files, not rows: a base64
+    #: data URI in the table would ride along in every list response and in
+    #: the WebSocket frame. Defaults under `data/` so `make dev` needs no
+    #: setup; the container overrides it to a mounted volume.
+    MEDIA_DIR: str = "data/media"
+
     REDIS_URL: str = "redis://localhost:6379/0"
     MQTT_HOST: str = "localhost"
     MQTT_PORT: int = 1883

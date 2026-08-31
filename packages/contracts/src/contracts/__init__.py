@@ -12,6 +12,16 @@ RULES
   3. Additive changes (new optional field, new enum member) are cheap.
      Renames and removals are not — they break five people simultaneously.
 
+AMENDMENT (v1.2.0) — ⚠️ NEEDS TEAM ACK BEFORE THIS LANDS. A second approved
+unfreeze for the mobile app's citizen reports: ReportCategory, ReportStatus,
+TERMINAL_REPORT_STATUSES, WSMessageType.REPORT_NEW, and the CitizenReport
+model. Purely additive — no existing enum member, model field, or Protocol
+signature is renamed, removed, or changed, and every previously valid
+construction still validates. Owners touched: M5 (table, migration,
+endpoints), M6 (generated types, municipal backlog). See BUILD.md §12 for
+the amendment record and the reasoning for why a citizen report is NOT an
+Observation. Contracts are RE-FROZEN as of this version.
+
 AMENDMENT (v1.1.0): one approved, one-time unfreeze added the AI intelligence
 layer — NEAR_MISS, RiskBand, RecommendationType, UrbanRiskScore,
 InfrastructureRecommendation, NearMissEvent, RiskContext, RiskScorer,
@@ -28,9 +38,12 @@ from .enums import (
     SAFETY_CLASSES,
     SEVERITY_ORDER,
     STATUS_ORDER,
+    TERMINAL_REPORT_STATUSES,
     TERMINAL_STATUSES,
     DetectionClass,
     RecommendationType,
+    ReportCategory,
+    ReportStatus,
     RiskBand,
     RiskLevel,
     Severity,
@@ -64,6 +77,7 @@ from .models import (
     AnalyticsSummary,
     BBox,
     BusPosition,
+    CitizenReport,
     Event,
     FrameMeta,
     HealthStatus,
@@ -92,7 +106,7 @@ from .topics import (
 #: 1.1.0 — the one-time AI intelligence layer amendment (near-miss, urban risk
 #: index, recommendations). Additive only: nothing existing renamed or removed.
 #: Re-frozen as of this version. See BUILD.md for the amendment record.
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 __all__ = [
     # enums
@@ -102,6 +116,8 @@ __all__ = [
     "RiskLevel",
     "RiskBand",
     "RecommendationType",
+    "ReportCategory",
+    "ReportStatus",
     "WSMessageType",
     "INFRASTRUCTURE_CLASSES",
     "SAFETY_CLASSES",
@@ -109,6 +125,7 @@ __all__ = [
     "TERMINAL_STATUSES",
     "SEVERITY_ORDER",
     "STATUS_ORDER",
+    "TERMINAL_REPORT_STATUSES",
     # models
     "BBox",
     "FrameMeta",
@@ -133,6 +150,8 @@ __all__ = [
     "InfrastructureRecommendation",
     "NearMissEvent",
     "RiskContext",
+    # citizen reports (v1.2.0)
+    "CitizenReport",
     # maths
     "fuse_confidence",
     "derive_status",

@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
-from . import analytics, events, fleet, health, incidents, intelligence, roads, routes, whatif, ws
+from . import (
+    analytics,
+    events,
+    fleet,
+    health,
+    incidents,
+    intelligence,
+    reports,
+    roads,
+    routes,
+    whatif,
+    ws,
+)
 
 ALL_ROUTERS = (
     health.router,
@@ -12,6 +24,7 @@ ALL_ROUTERS = (
     roads.router,
     whatif.router,
     incidents.router,
+    reports.router,
     intelligence.router,
     analytics.router,
     ws.router,

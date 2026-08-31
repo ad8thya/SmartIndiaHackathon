@@ -14,6 +14,7 @@ import { ESCALATION_RUNGS } from '../lib/tokens';
 import type {
   AnalyticsSummary,
   BusPosition,
+  CitizenReport,
   DangerousJunction,
   DetectionClass,
   IncidentReport,
@@ -80,6 +81,13 @@ interface Store {
   routes: UTRoute[];
   roads: RoadCondition[];
   incidents: IncidentReport[];
+  /**
+   * Reports filed by the public from apps/mobile. Kept beside `incidents`
+   * rather than merged into `events`: a citizen report carries no confidence
+   * and has not been corroborated by anything, and folding it into the event
+   * map would let it look like a fused detection.
+   */
+  reports: CitizenReport[];
   summary: AnalyticsSummary | null;
   whatIf: WhatIfResult[];
   ticker: TickerEntry[];
@@ -164,6 +172,7 @@ export const useStore = create<Store>((set, get) => ({
   routes: [],
   roads: [],
   incidents: [],
+  reports: [],
   summary: null,
   whatIf: [],
   ticker: [],
@@ -193,11 +202,12 @@ export const useStore = create<Store>((set, get) => ({
   async bootstrap() {
     set({ loading: true, lastError: null });
     try {
-      const [routes, events, roads, incidents, summary, fleet] = await Promise.all([
+      const [routes, events, roads, incidents, reports, summary, fleet] = await Promise.all([
         api.routes(),
         api.events({ limit: 2000 }),
         api.roads(),
         api.incidents({ limit: 100 }),
+        api.reports({ limit: 200 }),
         api.summary(),
         api.fleet(),
       ]);
@@ -205,6 +215,7 @@ export const useStore = create<Store>((set, get) => ({
         routes,
         roads,
         incidents,
+        reports,
         summary,
         events: Object.fromEntries(events.map((event) => [event.event_id, event])),
         buses: Object.fromEntries(fleet.map((bus) => [bus.bus_id, bus])),
@@ -303,6 +314,24 @@ export const useStore = create<Store>((set, get) => ({
                 kind: 'incident',
                 text: `${incident.incident_class.replace(/_/g, ' ')} reported by ${incident.reported_by_bus}`,
                 at: incident.ts,
+              }),
+            });
+            break;
+          }
+          case 'REPORT_NEW': {
+            // A member of the public just sent this from their phone. It
+            // reaches the backlog with no refresh, which is the half of T6
+            // that used to be impossible: reports lived in the phone's
+            // localStorage and never left the device at all.
+            const report = message.payload as unknown as CitizenReport;
+            if (get().reports.some((existing) => existing.report_id === report.report_id)) break;
+            set({
+              reports: [report, ...get().reports].slice(0, 500),
+              ticker: pushTicker(get().ticker, {
+                id: report.report_id,
+                kind: 'incident',
+                text: `Citizen report · ${report.category.replace(/_/g, ' ').toLowerCase()}${report.ward ? ` · ${report.ward}` : ''}`,
+                at: report.created_at,
               }),
             });
             break;

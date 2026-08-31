@@ -44,6 +44,8 @@ ENUMS = [
     contract_enums.RiskLevel,
     contract_enums.RiskBand,
     contract_enums.RecommendationType,
+    contract_enums.ReportCategory,
+    contract_enums.ReportStatus,
     contract_enums.WSMessageType,
 ]
 
@@ -60,6 +62,7 @@ MODELS = [
     contracts.WhatIfRequest,
     contracts.WhatIfResult,
     contracts.IncidentReport,
+    contracts.CitizenReport,
     contracts.WorkOrder,
     contracts.AnalyticsSummary,
     contracts.HealthStatus,

@@ -8,7 +8,7 @@
  *     nothing else in this directory
  */
 
-import { AlertTriangle, Activity, GitBranch, Sparkles, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { AlertTriangle, Activity, GitBranch, Inbox, Sparkles, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ErrorBoundary } from './ErrorBoundary';
 import { getScope } from '../lib/roleScope';
@@ -20,6 +20,7 @@ import { WhatIfPanel } from '../panels/WhatIfPanel';
 import { RiskPanel } from '../panels/RiskPanel';
 import { IncidentsPanel } from '../panels/IncidentsPanel';
 import { IntelligencePanel } from '../panels/IntelligencePanel';
+import { ReportsPanel } from '../panels/ReportsPanel';
 
 interface Tab {
   id: string;
@@ -37,6 +38,11 @@ const TABS: Tab[] = [
   { id: 'whatif', label: 'What-if', owner: 'M2', icon: <GitBranch size={14} />, Component: WhatIfPanel, selects: 'road' },
   { id: 'risk', label: 'Risk', owner: 'M3', icon: <AlertTriangle size={14} />, Component: RiskPanel, selects: 'event' },
   { id: 'incidents', label: 'Incidents', owner: 'M4', icon: <ShieldAlert size={14} />, Component: IncidentsPanel, selects: 'event' },
+  // Citizen reports read their own slice of the store rather than PanelProps —
+  // a report is not an event, so `events` has nothing to give it. It still
+  // takes the props: the tab contract is one shape for every panel, and a
+  // panel that quietly needed a different one would be the start of six.
+  { id: 'reports', label: 'Reports', owner: 'M5', icon: <Inbox size={14} />, Component: ReportsPanel, selects: 'event' },
   { id: 'intelligence', label: 'Intelligence', owner: 'M3', icon: <Sparkles size={14} />, Component: IntelligencePanel, selects: 'road' },
 ];
 

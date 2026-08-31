@@ -10,6 +10,7 @@ from enum import StrEnum
 
 __all__ = [
     "INFRASTRUCTURE_CLASSES",
+    "TERMINAL_REPORT_STATUSES",
     "SAFETY_CLASSES",
     "FUSABLE_CLASSES",
     "SEVERITY_ORDER",
@@ -17,6 +18,8 @@ __all__ = [
     "TERMINAL_STATUSES",
     "DetectionClass",
     "RecommendationType",
+    "ReportCategory",
+    "ReportStatus",
     "RiskBand",
     "RiskLevel",
     "Severity",
@@ -101,6 +104,58 @@ class WorkflowStatus(StrEnum):
     REJECTED = "REJECTED"
 
 
+class ReportCategory(StrEnum):
+    """What a member of the public says they are looking at.
+
+    Deliberately NOT ``DetectionClass``. That enum is the vocabulary of a
+    camera and a model — ``ALLIGATOR_CRACK`` and ``LONGITUDINAL_CRACK`` are
+    distinctions a YOLO head makes, not ones a person standing on a pavement
+    should be asked to make. This is the vocabulary of a person, and it is
+    short on purpose: six buttons fit on a phone, twelve do not.
+
+    The two vocabularies meet in exactly one place — when an operator links a
+    report to a fused ``Event``, which records a human's judgement rather than
+    a mapping table. There is no automatic category → class conversion, and
+    adding one would be a way of pretending a citizen classified a defect.
+    """
+
+    POTHOLE = "POTHOLE"
+    WATERLOGGING = "WATERLOGGING"
+    #: a broken or missing sign, signal, divider or road marking
+    DAMAGED_SIGN = "DAMAGED_SIGN"
+    STREETLIGHT = "STREETLIGHT"
+    GARBAGE = "GARBAGE"
+    OTHER = "OTHER"
+
+
+class ReportStatus(StrEnum):
+    """The life of a citizen report.
+
+    Deliberately NOT ``WorkflowStatus``. That ladder starts at ``DETECTED``
+    and runs through ``AI_VERIFIED`` — rungs that describe machine
+    corroboration and mean nothing for something a person typed. It also has
+    nine states, which is the right number for an operator console and far too
+    many to explain to the person who sent a photo of a pothole.
+
+    A report that gets linked to a fused event keeps its own status; the event
+    it points at has its own. They are separate ladders on purpose, so
+    "the city acknowledged your report" and "the defect reached
+    MAINTENANCE_ASSIGNED" never get conflated into one misleading chip.
+    """
+
+    #: received by the API. The only status a report can be created with.
+    SUBMITTED = "SUBMITTED"
+    #: an operator has seen it in the backlog
+    ACKNOWLEDGED = "ACKNOWLEDGED"
+    #: tied to a fused Event — the city was already tracking this
+    LINKED = "LINKED"
+    #: a crew is on it
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    #: reviewed and declined. The citizen is told; it is not deleted.
+    REJECTED = "REJECTED"
+
+
 class RiskLevel(StrEnum):
     """Composite risk band for a road segment (M3 fusion output)."""
 
@@ -152,6 +207,8 @@ class WSMessageType(StrEnum):
     EVENT_UPDATED = "EVENT_UPDATED"
     ROAD_CONDITION = "ROAD_CONDITION"
     INCIDENT = "INCIDENT"
+    #: a member of the public filed a report from the phone app (v1.2.0)
+    REPORT_NEW = "REPORT_NEW"
     TICK = "TICK"
 
 
@@ -222,3 +279,10 @@ SEVERITY_ORDER: dict[Severity, int] = {
 STATUS_ORDER: dict[WorkflowStatus, int] = {
     status: index for index, status in enumerate(WorkflowStatus)
 }
+
+
+#: Report states that are over, one way or the other. Mirrors TERMINAL_STATUSES
+#: for the workflow ladder — a phone must not show an SLA countdown on either.
+TERMINAL_REPORT_STATUSES: frozenset[ReportStatus] = frozenset(
+    {ReportStatus.RESOLVED, ReportStatus.REJECTED}
+)
