@@ -35,6 +35,7 @@ import { RequireRole } from './components/RequireRole';
 import { LoginScreen } from './screens/LoginScreen';
 import { NotAvailableScreen } from './screens/NotAvailableScreen';
 import { Placeholder } from './screens/Placeholder';
+import { RoadConditionsScreen } from './screens/citizen/RoadConditionsScreen';
 import { MOBILE_ROLES } from './roles/catalog';
 import { useSession } from './store/session';
 
@@ -112,17 +113,8 @@ export function App() {
             />
           }
         />
-        <Route
-          path="conditions"
-          element={
-            <Placeholder
-              icon={MapIcon}
-              title="Road conditions"
-              body="The public map: confirmed and acted-on hazards only, with no confidence scores, bus ids or internal status attached."
-              bullets={['Real offline basemap — T3', 'Confirmed events only — T4']}
-            />
-          }
-        />
+        {/* Full-bleed: the map owns the canvas, so no padding wrapper. */}
+        <Route path="conditions" element={<RoadConditionsScreen />} />
         <Route
           path="alerts"
           element={

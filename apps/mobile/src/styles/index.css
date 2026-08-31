@@ -117,6 +117,41 @@
     min-height: 44px;
     min-width: 44px;
   }
+
+  /**
+   * "You are here". A DOM marker rather than a map layer, because there is
+   * exactly one of it and it needs a CSS animation the GPU layers cannot do.
+   * The ring pulses outward on a slow loop so a stationary dot still reads as
+   * live rather than as a stuck pin.
+   */
+  .ut-user-dot {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: theme('colors.accent');
+    border: 2.5px solid #fff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  }
+
+  /* The pulsing ring. Its animation comes from the `animate-utping` utility
+     applied in UTMap.tsx, NOT from an `animation:` line here — tailwind only
+     emits a @keyframes block for a keyframe some utility actually uses, so a
+     raw `animation: utping` in this file references a rule that was never
+     generated and silently does nothing. */
+  .ut-user-dot > span {
+    position: absolute;
+    inset: -2.5px;
+    border-radius: 9999px;
+    background: theme('colors.accent');
+    opacity: 0.35;
+  }
+
+  /* MapLibre draws its own focus ring on the canvas; on a phone it only ever
+     appears after a tap and looks like a rendering fault. */
+  .maplibregl-canvas:focus {
+    outline: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

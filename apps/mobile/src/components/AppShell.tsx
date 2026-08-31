@@ -95,7 +95,14 @@ export function AppShell() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: EASE }}
-            className="min-h-full"
+            /**
+             * h-full, not min-h-full. A full-bleed screen (any map) needs a
+             * parent with a *definite* height or its 100% resolves to nothing
+             * and the canvas collapses to 0px — which renders as a blank panel
+             * rather than an error. Taller screens still scroll: their content
+             * overflows this box and `main` accounts for it.
+             */
+            className="h-full"
           >
             <Outlet />
           </motion.div>
