@@ -121,11 +121,11 @@ services/<module>/
    └───────────┬──────────────────────────┬──────────────┘
          REST  │                          │  WS /ws/live
                ▼                          ▼
-   ┌───────────────────────┐   ┌──────────────────────┐
-   │  M6 COMMAND CENTRE    │   │  M6 FIELD APP        │
-   │  MapLibre + deck.gl   │   │  Feed · Detail ·     │
-   │  :5173                │   │  Map · MyTasks :5174 │
-   └───────────────────────┘   └──────────────────────┘
+   ┌─────────────────────────────────────────────────────┐
+   │  M6 apps/web — ONE app, ONE port, :5173              │
+   │  MapLibre + deck.gl command centre at /app/:role ·   │
+   │  field app (Feed · Detail · Map · MyTasks) at /field │
+   └─────────────────────────────────────────────────────┘
 ```
 
 ### The four things you must understand
@@ -469,7 +469,7 @@ the calibration M1 already derives, and take a geometric time-to-collision. `TTC
 is `LARGE`, `< 1.0s` is `MEDIUM`, otherwise `SMALL` — not the IRC:82-2015 table, which
 governs surface distress dimensions and does not apply here.
 
-The mock (`near_miss.py`) scripts three junctions, one per route, and emits near-misses
+The mock (`near_miss.py`) scripts ten junctions, spread across all six routes, and emits near-misses
 two ways: as an `Observation` with `detection_class=NEAR_MISS` that flows through the
 *normal fusion path* (so a repeated near-miss escalates through the workflow ladder like
 any other event), and as the richer `NearMissEvent` (TTC, track ids, closing speed) that
