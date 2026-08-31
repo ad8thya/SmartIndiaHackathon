@@ -1,15 +1,19 @@
 /**
- * Events from the API, with the citizen privacy filter applied at the source.
+ * Events, from the one live cache.
  *
- * `publicOnly` is not a display option. When it is set, the request itself
- * asks only for the public statuses and the fields a member of the public may
- * see are the only ones that reach the component — so there is no code path
- * where a confidence score or a bus id is in memory on a citizen screen
- * waiting for someone to render it by accident.
+ * This used to fetch per screen. It now reads `store/live.ts`, which holds a
+ * single copy fed by one REST hydrate and one WebSocket — so a defect that
+ * escalates while a crew is looking at the queue updates the queue, and the
+ * map, and the verification list, at the same instant and with the same value.
+ *
+ * The `publicOnly` flag is kept as a second gate rather than removed. The
+ * store already refuses to admit a non-public event on a citizen session; this
+ * filters again on read, and `toPublicEvent` strips the fields on render.
+ * Three gates for one property is deliberate — see store/live.ts.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { api } from './api';
+import { useMemo } from 'react';
+import { useLive } from '../store/live';
 import { PUBLIC_STATUSES } from './display';
 import type { UTEvent } from './types';
 
@@ -48,29 +52,22 @@ export function toPublicEvent(event: UTEvent): PublicEvent {
 }
 
 export function useEvents({ publicOnly = false }: { publicOnly?: boolean } = {}) {
-  const [events, setEvents] = useState<UTEvent[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const events = useLive((s) => s.events);
+  const hydrated = useLive((s) => s.hydrated);
+  const loadError = useLive((s) => s.loadError);
 
-  const load = useCallback(async () => {
-    try {
-      const fetched = await api.events(
-        publicOnly ? { status: [...PUBLIC_STATUSES], limit: 500 } : { limit: 500 },
-      );
-      setEvents(fetched);
-      setError(null);
-    } catch (cause) {
-      // Empty, not null. `null` means "still loading", and leaving it null on
-      // failure leaves every consumer showing a skeleton forever — which is
-      // the worst of the three states: it says "nearly there" indefinitely
-      // while the phone has no signal at all.
-      setEvents([]);
-      setError(cause instanceof Error ? cause.message : 'could not load');
-    }
-  }, [publicOnly]);
+  const list = useMemo(() => {
+    const all = Object.values(events);
+    return publicOnly
+      ? all.filter((event) => (PUBLIC_STATUSES as readonly string[]).includes(event.status))
+      : all;
+  }, [events, publicOnly]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return { events, error, reload: load };
+  return {
+    // null still means "not loaded yet", so the skeleton logic in every screen
+    // is unchanged by the move to a shared store.
+    events: hydrated ? list : null,
+    error: loadError,
+    reload: () => undefined,
+  };
 }

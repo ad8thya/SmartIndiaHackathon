@@ -11,13 +11,15 @@
  * a body and nothing else.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bell, LogOut, RefreshCcw, Wifi } from 'lucide-react';
 import { MOBILE_ROLES } from '../roles/catalog';
 import { useSession } from '../store/session';
 import { BottomSheet } from './BottomSheet';
+import { OfflineBar } from './OfflineBar';
+import { useLive } from '../store/live';
 import { haptic } from '../lib/haptics';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -29,6 +31,24 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const connect = useLive((s) => s.connect);
+  const disconnect = useLive((s) => s.disconnect);
+
+  /**
+   * ONE socket for the whole app, opened here because this is the only
+   * component every signed-in screen mounts inside, and closed when the
+   * session ends. A per-screen socket would open and close on every tab
+   * change — the API would see a connection storm from a user simply
+   * navigating, and each new socket's HELLO would re-send the whole snapshot.
+   *
+   * Keyed on the role: it decides what the store is allowed to ingest (see
+   * store/live.ts), so switching role must rebuild the connection rather than
+   * keep one that was filtered for somebody else.
+   */
+  useEffect(() => {
+    connect(session.role);
+    return () => disconnect();
+  }, [connect, disconnect, session.role]);
 
   // Longest matching tab wins, so /citizen/report does not resolve to the
   // /citizen home tab just because the prefix matches.
@@ -84,6 +104,8 @@ export function AppShell() {
           </button>
         </div>
       </header>
+
+      <OfflineBar />
 
       {/* One scroll container for the whole app. Keyed on the path so each
           screen enters rather than swapping in place. */}

@@ -1,10 +1,14 @@
 /**
- * The field app, shown as a phone. Owned by M6.
+ * The mobile app, shown as a phone. Owned by M6.
  *
  * A fixed 390×844 iPhone-shaped frame containing an iframe pointed at the
- * *actual* field app dev server. It is not a screenshot and not a re-implementation:
- * the same URL opens on a real phone, and both stay in sync because there is
- * only one app.
+ * *actual* mobile app. Not a screenshot and not a re-implementation: the same
+ * URL opens on a real phone, and both stay in sync because there is one app.
+ *
+ * It points at apps/mobile now, not this app's old `/field` route. That route
+ * still exists and still works — it is a phone-shaped view of the console for
+ * anyone who wants it — but the thing a demo should show beside the console is
+ * the app a citizen or a crew actually installs.
  */
 
 import { ExternalLink, RotateCw, Smartphone, X } from 'lucide-react';
@@ -12,10 +16,23 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../store/useStore';
 
-/** Same origin now — /field is a route of this very app, so the iframe and a
- * real phone on the LAN both load the same URL from the same dev server. */
-export const FIELD_APP_URL: string =
-  (import.meta.env.VITE_FIELD_APP_URL as string | undefined) ?? `${window.location.origin}/field`;
+/**
+ * Where apps/mobile lives, from this page's point of view.
+ *
+ *   · dev — a separate vite server on :5176. `hostname`, not `localhost`, so
+ *     the "open on a real phone" link works when the console is being viewed
+ *     from another machine on the LAN.
+ *   · demo / production — one origin, one port; FastAPI serves the mobile
+ *     build at /m (see services/cloud/api/spa.py's mount_mobile).
+ *
+ * Getting this wrong is silent: the iframe renders a blank white rectangle and
+ * nothing in the console says why.
+ */
+export const MOBILE_APP_URL: string =
+  (import.meta.env.VITE_MOBILE_APP_URL as string | undefined) ??
+  (import.meta.env.DEV
+    ? `${window.location.protocol}//${window.location.hostname}:5176`
+    : `${window.location.origin}/m`);
 
 export function PhoneFrame() {
   const showPhone = useStore((s) => s.showPhone);
@@ -33,7 +50,7 @@ export function PhoneFrame() {
     >
       <div className="mb-2 flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-ink-800/95 px-2.5 py-1.5 backdrop-blur">
         <span className="flex items-center gap-1.5 text-[10px] tracking-wider text-slate-400">
-          <Smartphone size={12} /> Field app
+          <Smartphone size={12} /> Mobile app
         </span>
         <span className="flex items-center gap-1">
           <button
@@ -45,7 +62,7 @@ export function PhoneFrame() {
             <RotateCw size={13} />
           </button>
           <a
-            href={FIELD_APP_URL}
+            href={MOBILE_APP_URL}
             target="_blank"
             rel="noreferrer"
             title="Open on a real phone — same URL"
@@ -77,8 +94,8 @@ export function PhoneFrame() {
         >
           <iframe
             key={reloadKey}
-            title="URBAN TWIN field app"
-            src={FIELD_APP_URL}
+            title="URBAN TWIN mobile app"
+            src={MOBILE_APP_URL}
             className="origin-top-left border-0"
             style={{ width: 390, height: 844, transform: 'scale(0.78)' }}
           />
@@ -86,9 +103,9 @@ export function PhoneFrame() {
       </div>
 
       <p className="mt-2 max-w-[320px] text-center text-[10px] leading-relaxed text-slate-500">
-        Live iframe of the real field app at{' '}
-        <span className="font-mono text-slate-400">{FIELD_APP_URL}</span> — open that URL on a
-        phone and you get the same thing.
+        Live iframe of the real mobile app at{' '}
+        <span className="font-mono text-slate-400">{MOBILE_APP_URL}</span> — open that URL on a
+        phone and you get the same thing, installable.
       </p>
     </motion.aside>
   );
