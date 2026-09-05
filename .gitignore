@@ -39,6 +39,9 @@ data/hazards/
 data/hazards_prepared/
 data/plates/
 data/plates_prepared/
+# pretrained-baseline smoke test (step 1) — downloaded/generated, not source
+data/smoke_test_images/
+data/smoke_test_results/
 # citizen report photos — user uploads, never committed
 data/media/
 
